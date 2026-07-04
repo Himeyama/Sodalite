@@ -6,7 +6,11 @@ namespace SDApp.Services;
 
 sealed class BackendApiClient(int port) : IDisposable
 {
-    readonly HttpClient _http = new() { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+    readonly HttpClient _http = new()
+    {
+        BaseAddress = new Uri($"http://127.0.0.1:{port}"),
+        Timeout = TimeSpan.FromMinutes(10),
+    };
 
     public async Task<GenerationResult> GenerateTextToImageAsync(GenerationRequest request, CancellationToken ct)
     {
