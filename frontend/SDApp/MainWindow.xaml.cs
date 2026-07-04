@@ -23,17 +23,31 @@ public sealed partial class MainWindow : Window
 
         Closed += MainWindow_Closed;
 
-        _ = StartBackendAndNavigateAsync();
+        RootFrame.Navigate(typeof(GenerationPage));
+
+        if (RootFrame.Content is GenerationPage generationPage)
+        {
+            generationPage.StatusChanged += (_, status) => StatusBarTextBlock.Text = status;
+            generationPage.DeviceInfoChanged += (_, deviceInfo) => StatusBarDeviceInfoTextBlock.Text = deviceInfo;
+        }
+
+        _ = StartBackendAsync();
     }
 
-    async Task StartBackendAndNavigateAsync()
+    async Task StartBackendAsync()
     {
         try
         {
             int port = await _backendProcessManager.StartAsync().ConfigureAwait(false);
             _apiClient = new BackendApiClient(port);
 
-            DispatcherQueue.TryEnqueue(() => RootFrame.Navigate(typeof(GenerationPage), _apiClient));
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (RootFrame.Content is GenerationPage generationPage)
+                {
+                    generationPage.AttachBackend(_apiClient);
+                }
+            });
         }
         catch (Exception ex)
         {

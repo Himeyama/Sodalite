@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -9,23 +10,50 @@ namespace SDApp.Views;
 
 public sealed partial class GenerationPage : Page
 {
-    GenerationViewModel? _viewModel;
+    const string BrailleSpinnerFrames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
 
-    public GenerationPage() => InitializeComponent();
+    readonly DispatcherQueueTimer _backendStartingSpinnerTimer;
+
+    GenerationViewModel? _viewModel;
+    int _backendStartingSpinnerIndex;
+
+    public event EventHandler<string>? StatusChanged;
+
+    public event EventHandler<string>? DeviceInfoChanged;
+
+    public GenerationPage()
+    {
+        InitializeComponent();
+
+        _backendStartingSpinnerTimer = DispatcherQueue.CreateTimer();
+        _backendStartingSpinnerTimer.Interval = TimeSpan.FromMilliseconds(80);
+        _backendStartingSpinnerTimer.Tick += (_, _) =>
+        {
+            _backendStartingSpinnerIndex = (_backendStartingSpinnerIndex + 1) % BrailleSpinnerFrames.Length;
+            GenerateButton.Content = $"{BrailleSpinnerFrames[_backendStartingSpinnerIndex]} Backend starting...";
+        };
+    }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
 
-        if (e.Parameter is not BackendApiClient apiClient)
+        _viewModel = new GenerationViewModel(DispatcherQueue);
+        _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+
+        GenerateButton.IsEnabled = false;
+        StatusChanged?.Invoke(this, _viewModel.StatusText);
+        _backendStartingSpinnerTimer.Start();
+    }
+
+    internal void AttachBackend(BackendApiClient apiClient)
+    {
+        if (_viewModel is not GenerationViewModel viewModel)
         {
             return;
         }
 
-        _viewModel = new GenerationViewModel(apiClient, DispatcherQueue);
-        _viewModel.PropertyChanged += ViewModel_PropertyChanged;
-
-        _ = _viewModel.InitializeAsync(CancellationToken.None);
+        _ = viewModel.AttachBackendAsync(apiClient, CancellationToken.None);
     }
 
     void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -38,13 +66,22 @@ public sealed partial class GenerationPage : Page
         switch (e.PropertyName)
         {
             case nameof(GenerationViewModel.StatusText):
-                StatusTextBlock.Text = viewModel.StatusText;
+                StatusChanged?.Invoke(this, viewModel.StatusText);
                 break;
             case nameof(GenerationViewModel.ResultImage):
                 ResultImageControl.Source = viewModel.ResultImage;
                 break;
+            case nameof(GenerationViewModel.IsBackendReady):
+                if (viewModel.IsBackendReady)
+                {
+                    _backendStartingSpinnerTimer.Stop();
+                    GenerateButton.Content = "Generate";
+                }
+
+                GenerateButton.IsEnabled = viewModel.IsBackendReady && !viewModel.IsGenerating;
+                break;
             case nameof(GenerationViewModel.IsGenerating):
-                GenerateButton.IsEnabled = !viewModel.IsGenerating;
+                GenerateButton.IsEnabled = viewModel.IsBackendReady && !viewModel.IsGenerating;
                 GenerationProgressRing.IsActive = viewModel.IsGenerating;
                 break;
             case nameof(GenerationViewModel.Samplers):
@@ -56,7 +93,7 @@ public sealed partial class GenerationPage : Page
 
                 break;
             case nameof(GenerationViewModel.DeviceInfo):
-                DeviceInfoTextBlock.Text = viewModel.DeviceInfo;
+                DeviceInfoChanged?.Invoke(this, viewModel.DeviceInfo);
                 break;
         }
     }

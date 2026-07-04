@@ -11,9 +11,9 @@ namespace SDApp.ViewModels;
 
 sealed class GenerationViewModel : INotifyPropertyChanged
 {
-    readonly BackendApiClient _apiClient;
     readonly DispatcherQueue _dispatcherQueue;
 
+    BackendApiClient? _apiClient;
     string _prompt = "";
     string _negativePrompt = "";
     int _steps = 20;
@@ -22,17 +22,14 @@ sealed class GenerationViewModel : INotifyPropertyChanged
     int _height = 512;
     string _sampler = "euler_a";
     string _seedText = "";
-    string _statusText = "Ready";
+    string _statusText = "Backend starting...";
     bool _isGenerating;
+    bool _isBackendReady;
     BitmapImage? _resultImage;
     List<string> _samplers = [];
     string _deviceInfo = "";
 
-    public GenerationViewModel(BackendApiClient apiClient, DispatcherQueue dispatcherQueue)
-    {
-        _apiClient = apiClient;
-        _dispatcherQueue = dispatcherQueue;
-    }
+    public GenerationViewModel(DispatcherQueue dispatcherQueue) => _dispatcherQueue = dispatcherQueue;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -97,6 +94,12 @@ sealed class GenerationViewModel : INotifyPropertyChanged
         set => SetField(ref _isGenerating, value);
     }
 
+    public bool IsBackendReady
+    {
+        get => _isBackendReady;
+        set => SetField(ref _isBackendReady, value);
+    }
+
     public BitmapImage? ResultImage
     {
         get => _resultImage;
@@ -115,12 +118,14 @@ sealed class GenerationViewModel : INotifyPropertyChanged
         set => SetField(ref _deviceInfo, value);
     }
 
-    public async Task InitializeAsync(CancellationToken ct)
+    public async Task AttachBackendAsync(BackendApiClient apiClient, CancellationToken ct)
     {
+        _apiClient = apiClient;
+
         try
         {
-            List<string> samplers = await _apiClient.GetSamplersAsync(ct).ConfigureAwait(false);
-            HealthInfo health = await _apiClient.GetHealthAsync(ct).ConfigureAwait(false);
+            List<string> samplers = await apiClient.GetSamplersAsync(ct).ConfigureAwait(false);
+            HealthInfo health = await apiClient.GetHealthAsync(ct).ConfigureAwait(false);
 
             _dispatcherQueue.TryEnqueue(() =>
             {
@@ -131,6 +136,8 @@ sealed class GenerationViewModel : INotifyPropertyChanged
                 }
 
                 DeviceInfo = $"{health.Device} / {health.LoadedModel}";
+                IsBackendReady = true;
+                StatusText = "Ready";
             });
         }
         catch (Exception ex)
@@ -141,7 +148,7 @@ sealed class GenerationViewModel : INotifyPropertyChanged
 
     public async Task GenerateAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(Prompt) || IsGenerating)
+        if (_apiClient is not BackendApiClient apiClient || string.IsNullOrWhiteSpace(Prompt) || IsGenerating)
         {
             return;
         }
@@ -167,7 +174,7 @@ sealed class GenerationViewModel : INotifyPropertyChanged
                 Sampler,
                 seed);
 
-            GenerationResult result = await _apiClient.GenerateTextToImageAsync(request, ct).ConfigureAwait(false);
+            GenerationResult result = await apiClient.GenerateTextToImageAsync(request, ct).ConfigureAwait(false);
 
             if (result.Error is not null)
             {
@@ -181,7 +188,7 @@ sealed class GenerationViewModel : INotifyPropertyChanged
                 return;
             }
 
-            byte[] imageBytes = await _apiClient.DownloadImageAsync(imageUrl, ct).ConfigureAwait(false);
+            byte[] imageBytes = await apiClient.DownloadImageAsync(imageUrl, ct).ConfigureAwait(false);
 
             _dispatcherQueue.TryEnqueue(async void () =>
             {

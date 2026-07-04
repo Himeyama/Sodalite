@@ -58,12 +58,8 @@
                     </StackPanel>
                 </Grid>
 
-                <Button x:Name="GenerateButton" Content="Generate" HorizontalAlignment="Stretch"
-                        Style="{ThemeResource AccentButtonStyle}" Click="GenerateButton_Click" />
-
-                <TextBlock x:Name="StatusTextBlock" Text="Ready" Opacity="0.7" TextWrapping="Wrap" />
-                <TextBlock x:Name="DeviceInfoTextBlock" Opacity="0.5"
-                           Style="{ThemeResource CaptionTextBlockStyle}" />
+                <Button x:Name="GenerateButton" Content="⠋ Backend starting..." HorizontalAlignment="Stretch"
+                        Style="{ThemeResource AccentButtonStyle}" Click="GenerateButton_Click" IsEnabled="False" />
             </StackPanel>
         </ScrollViewer>
 

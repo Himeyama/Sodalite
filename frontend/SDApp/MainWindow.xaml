@@ -12,7 +12,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid RowDefinitions="Auto,*">
+    <Grid RowDefinitions="Auto,*,Auto">
         <Grid x:Name="TitleBarGrid" Grid.Row="0" Height="48" Background="Transparent">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
                         Margin="16,0,0,0" Spacing="8">
@@ -23,5 +23,15 @@
         </Grid>
 
         <Frame x:Name="RootFrame" Grid.Row="1" />
+
+        <Border Grid.Row="2" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                Padding="16,8">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock x:Name="StatusBarTextBlock" Grid.Column="0" Text="Ready"
+                           Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.7" />
+                <TextBlock x:Name="StatusBarDeviceInfoTextBlock" Grid.Column="1"
+                           Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.5" />
+            </Grid>
+        </Border>
     </Grid>
 </Window>
