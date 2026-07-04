@@ -38,3 +38,7 @@ class ModelInfo(BaseModel):
 
 class SetActiveModelRequest(BaseModel):
     model_id: str
+
+
+class ImportModelRequest(BaseModel):
+    model_path: str

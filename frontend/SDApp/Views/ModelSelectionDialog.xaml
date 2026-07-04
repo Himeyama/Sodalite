@@ -11,7 +11,7 @@
     Style="{StaticResource DefaultContentDialogStyle}"
     mc:Ignorable="d">
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*" MinWidth="420" MinHeight="320">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" MinWidth="420" MinHeight="320">
         <TextBlock Grid.Row="0" x:Uid="ModelSelectionDialog_Description"
                    Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.7"
                    Margin="0,0,0,8" TextWrapping="Wrap" />
@@ -27,12 +27,17 @@
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="local:ModelListItem">
                     <Grid ColumnDefinitions="*,Auto" Padding="0,4">
-                        <TextBlock Grid.Column="0" Text="{x:Bind ModelId}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="0" Text="{x:Bind DisplayName}" VerticalAlignment="Center"
+                                   ToolTipService.ToolTip="{x:Bind ModelId}" />
                         <FontIcon Grid.Column="1" Glyph="&#xE73E;" FontSize="14"
                                   VerticalAlignment="Center" Visibility="{x:Bind ActiveVisibility}" />
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>
+
+        <Button Grid.Row="4" x:Uid="ModelSelectionDialog_ImportButton"
+                HorizontalAlignment="Stretch" Margin="0,8,0,0"
+                Click="ImportButton_Click" />
     </Grid>
 </ContentDialog>

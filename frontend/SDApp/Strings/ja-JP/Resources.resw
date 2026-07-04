@@ -76,13 +76,19 @@
     <value>閉じる</value>
   </data>
   <data name="ModelSelectionDialog_Description.Text" xml:space="preserve">
-    <value>ローカルにダウンロード済みのモデルから選択できます。</value>
+    <value>ローカルにダウンロード済みのモデルから選択できます。下のボタンから.safetensors/.ckptファイルをインポートすることもできます。</value>
   </data>
   <data name="ModelSelectionDialog_LoadErrorTitle" xml:space="preserve">
     <value>モデル一覧の取得に失敗しました</value>
   </data>
   <data name="ModelSelectionDialog_SwitchErrorTitle" xml:space="preserve">
     <value>モデルの切り替えに失敗しました</value>
+  </data>
+  <data name="ModelSelectionDialog_ImportButton.Content" xml:space="preserve">
+    <value>ローカルファイルからインポート...</value>
+  </data>
+  <data name="ModelSelectionDialog_ImportErrorTitle" xml:space="preserve">
+    <value>モデルのインポートに失敗しました</value>
   </data>
 
   <data name="Generation_PromptLabel.Text" xml:space="preserve">

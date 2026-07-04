@@ -72,7 +72,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        ModelSelectionDialog dialog = new(apiClient) { XamlRoot = Content.XamlRoot };
+        ModelSelectionDialog dialog = new(apiClient, this) { XamlRoot = Content.XamlRoot };
         await dialog.ShowAsync();
 
         if (dialog.SelectedModelId is not null && RootFrame.Content is GenerationPage generationPage)

@@ -77,3 +77,45 @@ def test_set_active_model_rejects_unknown_model(
     response = client.post("/api/v1/models/active", json={"model_id": "no/such-model"})
 
     assert response.status_code == 422
+
+
+def test_import_model(client: TestClient, tmp_path) -> None:
+    checkpoint = tmp_path / "my-model.safetensors"
+    checkpoint.write_bytes(b"fake checkpoint data")
+
+    response = client.post("/api/v1/models/imported", json={"model_path": str(checkpoint)})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_id"] == str(checkpoint)
+    assert body["is_active"] is False
+    assert body["size_on_disk_bytes"] == checkpoint.stat().st_size
+
+
+def test_import_model_rejects_missing_file(client: TestClient, tmp_path) -> None:
+    missing = tmp_path / "does-not-exist.safetensors"
+
+    response = client.post("/api/v1/models/imported", json={"model_path": str(missing)})
+
+    assert response.status_code == 422
+
+
+def test_import_model_rejects_unsupported_extension(client: TestClient, tmp_path) -> None:
+    unsupported = tmp_path / "notes.txt"
+    unsupported.write_text("not a checkpoint")
+
+    response = client.post("/api/v1/models/imported", json={"model_path": str(unsupported)})
+
+    assert response.status_code == 422
+
+
+def test_list_models_includes_imported_models(client: TestClient, tmp_path) -> None:
+    checkpoint = tmp_path / "my-model.safetensors"
+    checkpoint.write_bytes(b"fake checkpoint data")
+    client.post("/api/v1/models/imported", json={"model_path": str(checkpoint)})
+
+    response = client.get("/api/v1/models")
+
+    assert response.status_code == 200
+    model_ids = [model["model_id"] for model in response.json()]
+    assert str(checkpoint) in model_ids

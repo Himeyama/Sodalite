@@ -1,10 +1,15 @@
 """Health and system-info endpoints."""
 
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Request
 
+from sdapp_backend.inference.imported_models_store import add_imported_model_path
 from sdapp_backend.inference.model_registry import list_cached_models
 from sdapp_backend.inference.samplers import available_samplers
-from sdapp_backend.schemas.generation import ModelInfo, SetActiveModelRequest
+from sdapp_backend.schemas.generation import ImportModelRequest, ModelInfo, SetActiveModelRequest
+
+SUPPORTED_CHECKPOINT_EXTENSIONS = {".safetensors", ".ckpt"}
 
 router = APIRouter(tags=["system"])
 
@@ -38,3 +43,15 @@ def set_active_model(request: Request, body: SetActiveModelRequest) -> ModelInfo
     except OSError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return ModelInfo(model_id=pipeline_manager.model_id, is_active=True, size_on_disk_bytes=0)
+
+
+@router.post("/models/imported")
+def import_model(body: ImportModelRequest) -> ModelInfo:
+    path = Path(body.model_path)
+    if path.suffix.lower() not in SUPPORTED_CHECKPOINT_EXTENSIONS:
+        raise HTTPException(status_code=422, detail=f"Unsupported file type: {path.suffix}")
+    if not path.is_file():
+        raise HTTPException(status_code=422, detail=f"File not found: {body.model_path}")
+
+    add_imported_model_path(body.model_path)
+    return ModelInfo(model_id=body.model_path, is_active=False, size_on_disk_bytes=path.stat().st_size)

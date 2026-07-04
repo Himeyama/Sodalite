@@ -76,13 +76,19 @@
     <value>Close</value>
   </data>
   <data name="ModelSelectionDialog_Description.Text" xml:space="preserve">
-    <value>Choose from models already downloaded locally.</value>
+    <value>Choose from models already downloaded locally, or import a .safetensors/.ckpt file using the button below.</value>
   </data>
   <data name="ModelSelectionDialog_LoadErrorTitle" xml:space="preserve">
     <value>Failed to load model list</value>
   </data>
   <data name="ModelSelectionDialog_SwitchErrorTitle" xml:space="preserve">
     <value>Failed to switch model</value>
+  </data>
+  <data name="ModelSelectionDialog_ImportButton.Content" xml:space="preserve">
+    <value>Import from local file...</value>
+  </data>
+  <data name="ModelSelectionDialog_ImportErrorTitle" xml:space="preserve">
+    <value>Failed to import model</value>
   </data>
 
   <data name="Generation_PromptLabel.Text" xml:space="preserve">

@@ -69,6 +69,21 @@ sealed class BackendApiClient(int port) : IDisposable
         return new ModelInfo(dto.ModelId, dto.IsActive, dto.SizeOnDiskBytes);
     }
 
+    public async Task<ModelInfo> ImportModelAsync(string modelPath, CancellationToken ct)
+    {
+        HttpResponseMessage response = await _http
+            .PostAsJsonAsync("/api/v1/models/imported", new ImportModelBody(modelPath), ct)
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        ModelDto dto = await response.Content
+            .ReadFromJsonAsync<ModelDto>(ct)
+            .ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Empty response from backend.");
+
+        return new ModelInfo(dto.ModelId, dto.IsActive, dto.SizeOnDiskBytes);
+    }
+
     public void Dispose() => _http.Dispose();
 
     sealed record TextToImageBody(
@@ -98,6 +113,8 @@ sealed class BackendApiClient(int port) : IDisposable
         [property: JsonPropertyName("size_on_disk_bytes")] long SizeOnDiskBytes);
 
     sealed record SetActiveModelBody([property: JsonPropertyName("model_id")] string ModelId);
+
+    sealed record ImportModelBody([property: JsonPropertyName("model_path")] string ModelPath);
 }
 
 sealed record HealthInfo(string Status, string Device, string LoadedModel);
