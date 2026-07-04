@@ -7,21 +7,75 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid ColumnDefinitions="360,*" Padding="20" ColumnSpacing="20">
-        <StackPanel Grid.Column="0" Spacing="12" VerticalAlignment="Top">
-            <TextBlock Text="Prompt" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-            <TextBox x:Name="PromptTextBox" AcceptsReturn="True" Height="120"
-                     TextWrapping="Wrap" PlaceholderText="a cat wearing sunglasses" />
+    <Grid ColumnDefinitions="420,*" Padding="20" ColumnSpacing="20">
+        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="12">
+                <TextBlock Text="Prompt" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                <TextBox x:Name="PromptTextBox" AcceptsReturn="True" Height="100"
+                         TextWrapping="Wrap" PlaceholderText="a cat wearing sunglasses" />
 
-            <Button x:Name="GenerateButton" Content="Generate" HorizontalAlignment="Stretch"
-                    Style="{ThemeResource AccentButtonStyle}" Click="GenerateButton_Click" />
+                <TextBlock Text="Negative prompt" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                <TextBox x:Name="NegativePromptTextBox" AcceptsReturn="True" Height="70"
+                         TextWrapping="Wrap" PlaceholderText="low quality, blurry" />
 
-            <TextBlock x:Name="StatusTextBlock" Text="Ready" Opacity="0.7" />
-        </StackPanel>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Text="Sampler" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                        <ComboBox x:Name="SamplerComboBox" HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="4">
+                        <TextBlock Text="Seed (empty = random)" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                        <TextBox x:Name="SeedTextBox" PlaceholderText="random" />
+                    </StackPanel>
+                </Grid>
 
-        <Border Grid.Column="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                CornerRadius="8">
-            <Image x:Name="ResultImageControl" Stretch="Uniform" Margin="8" />
-        </Border>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Steps" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                    <Slider x:Name="StepsSlider" Minimum="1" Maximum="150" Value="20"
+                            TickFrequency="10" ValueChanged="StepsSlider_ValueChanged" />
+                    <TextBlock x:Name="StepsValueTextBlock" Text="20" Opacity="0.7" />
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="CFG scale" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                    <Slider x:Name="CfgScaleSlider" Minimum="0" Maximum="30" Value="7"
+                            StepFrequency="0.5" TickFrequency="5" ValueChanged="CfgScaleSlider_ValueChanged" />
+                    <TextBlock x:Name="CfgScaleValueTextBlock" Text="7.0" Opacity="0.7" />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Text="Width" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                        <NumberBox x:Name="WidthNumberBox" Minimum="64" Maximum="2048"
+                                   SmallChange="8" LargeChange="64" Value="512"
+                                   SpinButtonPlacementMode="Compact" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="4">
+                        <TextBlock Text="Height" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                        <NumberBox x:Name="HeightNumberBox" Minimum="64" Maximum="2048"
+                                   SmallChange="8" LargeChange="64" Value="512"
+                                   SpinButtonPlacementMode="Compact" />
+                    </StackPanel>
+                </Grid>
+
+                <Button x:Name="GenerateButton" Content="Generate" HorizontalAlignment="Stretch"
+                        Style="{ThemeResource AccentButtonStyle}" Click="GenerateButton_Click" />
+
+                <TextBlock x:Name="StatusTextBlock" Text="Ready" Opacity="0.7" TextWrapping="Wrap" />
+                <TextBlock x:Name="DeviceInfoTextBlock" Opacity="0.5"
+                           Style="{ThemeResource CaptionTextBlockStyle}" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Column="1" RowDefinitions="*,Auto">
+            <Border Grid.Row="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="8">
+                <Grid>
+                    <Image x:Name="ResultImageControl" Stretch="Uniform" Margin="8" />
+                    <ProgressRing x:Name="GenerationProgressRing" IsActive="False"
+                                  Width="48" Height="48" />
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Page>

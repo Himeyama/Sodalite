@@ -10,6 +10,7 @@ sealed class BackendProcessManager : IAsyncDisposable
     static readonly TimeSpan HealthCheckTimeout = TimeSpan.FromSeconds(120);
 
     readonly string _backendProjectPath;
+    readonly JobObject _jobObject = new();
     Process? _process;
 
     public int Port { get; private set; }
@@ -31,6 +32,10 @@ sealed class BackendProcessManager : IAsyncDisposable
         };
 
         _process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start backend process.");
+
+        // このアプリが WinRT の FailFast 等で異常終了しても、OS が確実に
+        // uv/python の子プロセスツリーを終了させるよう Job Object に紐付ける。
+        _jobObject.Assign(_process.SafeHandle);
 
         await WaitForHealthyAsync(ct).ConfigureAwait(false);
 
@@ -92,6 +97,7 @@ sealed class BackendProcessManager : IAsyncDisposable
         }
 
         _process?.Dispose();
+        _jobObject.Dispose();
         return ValueTask.CompletedTask;
     }
 }
