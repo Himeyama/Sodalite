@@ -93,6 +93,17 @@ sealed class BackendApiClient(int port) : IDisposable
         return new ModelInfo(dto.ModelId, dto.IsActive, dto.SizeOnDiskBytes);
     }
 
+    public async Task RemoveImportedModelAsync(string modelPath, CancellationToken ct)
+    {
+        HttpRequestMessage request = new(HttpMethod.Delete, "/api/v1/models/imported")
+        {
+            Content = JsonContent.Create(new ImportModelBody(modelPath)),
+        };
+
+        HttpResponseMessage response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<List<LoraFileInfo>> GetLorasAsync(CancellationToken ct)
     {
         List<LoraDto>? dtos = await _http.GetFromJsonAsync<List<LoraDto>>("/api/v1/loras", ct).ConfigureAwait(false);

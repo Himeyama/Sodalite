@@ -22,6 +22,15 @@ def add_imported_model_path(model_path: str) -> list[str]:
     return paths
 
 
+def remove_imported_model_path(model_path: str) -> list[str]:
+    """Drop an imported checkpoint from the registry, leaving the file on disk untouched."""
+    paths = load_imported_model_paths()
+    if model_path in paths:
+        paths.remove(model_path)
+        _save(paths)
+    return paths
+
+
 def _save(paths: list[str]) -> None:
     with STORE_PATH.open("w", encoding="utf-8") as file:
         json.dump(paths, file, indent=2, ensure_ascii=False)

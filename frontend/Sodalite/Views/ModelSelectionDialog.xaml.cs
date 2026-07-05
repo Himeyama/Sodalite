@@ -20,6 +20,7 @@ sealed partial class ModelSelectionDialog : ContentDialog
     readonly ObservableCollection<SelectedLoraViewModel> _selectedLoras;
 
     List<LoraFileInfo> _availableLoras = [];
+    bool _isRemovingModel;
 
     public string? SelectedModelId { get; private set; }
 
@@ -127,7 +128,8 @@ sealed partial class ModelSelectionDialog : ContentDialog
 
     async void ModelListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (ModelListView.SelectedItem is not ModelListItem item || item.IsActive)
+        // 削除ボタン経由で項目が選択状態になったときはモデル切り替えを走らせない。
+        if (_isRemovingModel || ModelListView.SelectedItem is not ModelListItem item || item.IsActive)
         {
             return;
         }
@@ -142,9 +144,8 @@ sealed partial class ModelSelectionDialog : ContentDialog
             SelectedModelId = result.ModelId;
             AppSettings.LastModelId = result.ModelId;
 
-            // ベースモデルが変わると LoRA の互換性が変わる(SD1.5/SDXL)。適用中の LoRA は一旦すべて解除する。
-            _selectedLoras.Clear();
-
+            // モデルを切り替えても選択中の LoRA と重みはそのまま維持する。SD1.5/SDXL の
+            // 互換性が合わない LoRA は生成時にバックエンド側でスキップされる。
             Hide();
         }
         catch (Exception ex)
@@ -189,6 +190,35 @@ sealed partial class ModelSelectionDialog : ContentDialog
         {
             LoadingProgressRing.IsActive = false;
             ModelListView.IsEnabled = true;
+        }
+    }
+
+    async void RemoveModelButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: ModelListItem item })
+        {
+            return;
+        }
+
+        ErrorInfoBar.IsOpen = false;
+        _isRemovingModel = true;
+        ModelListView.IsEnabled = false;
+        LoadingProgressRing.IsActive = true;
+
+        try
+        {
+            await _apiClient.RemoveImportedModelAsync(item.ModelId, CancellationToken.None).ConfigureAwait(true);
+            await LoadModelsAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ResourceLoader.GetString("ModelSelectionDialog_RemoveErrorTitle"), ex.Message);
+        }
+        finally
+        {
+            LoadingProgressRing.IsActive = false;
+            ModelListView.IsEnabled = true;
+            _isRemovingModel = false;
         }
     }
 
@@ -252,4 +282,12 @@ sealed partial class ModelSelectionDialog : ContentDialog
 sealed record ModelListItem(string ModelId, bool IsActive, string DisplayName)
 {
     public Visibility ActiveVisibility => IsActive ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>
+    /// インポート済み(ローカルファイルパス)かつ非アクティブな項目にだけ削除ボタンを出す。
+    /// Hugging Face キャッシュのモデルはリポジトリ ID なので対象外。アクティブモデルは
+    /// 切り替えてからでないと削除できない。
+    /// </summary>
+    public Visibility RemoveVisibility =>
+        !IsActive && Path.Exists(ModelId) ? Visibility.Visible : Visibility.Collapsed;
 }

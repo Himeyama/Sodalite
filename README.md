@@ -1,5 +1,7 @@
 <h1><img src="docs/icon.png" height="24" />&nbsp;Sodalite</h1>
 
+日本語 | [English](README.en.md)
+
 Stable Diffusion 画像生成デスクトップアプリ。一から独自実装したもの。
 
 <img width="600" alt="image" src="https://github.com/user-attachments/assets/e1151f70-408a-4a58-9549-4c01de492100" />

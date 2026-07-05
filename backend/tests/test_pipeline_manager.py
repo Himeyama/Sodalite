@@ -118,6 +118,56 @@ def test_generate_skips_text_encoder_lora_diffusers_cannot_parse() -> None:
     pipeline.set_adapters.assert_called_once_with(["lora_0"], adapter_weights=[1.0])
 
 
+def test_generate_skips_incompatible_lora_but_applies_the_rest() -> None:
+    manager = _make_manager()
+    pipeline = MagicMock()
+    pipeline.lora_state_dict.return_value = ({}, {}, {})
+    # First LoRA is an architecture mismatch (e.g. SDXL LoRA on an SD1.5 model);
+    # diffusers rejects it while loading into the UNet.
+    pipeline.load_lora_into_unet.side_effect = [ValueError("size mismatch"), None]
+    manager._pipeline = pipeline
+    manager.set_sampler = MagicMock()
+
+    manager.generate(
+        prompt="a cat",
+        negative_prompt="",
+        steps=4,
+        cfg_scale=7.0,
+        width=64,
+        height=64,
+        sampler="euler_a",
+        seed=None,
+        loras=[LoraSpec(model_id="bad/lora", weight=0.5), LoraSpec(model_id="good/lora", weight=0.9)],
+    )
+
+    # The bad adapter is dropped and only the compatible one is activated.
+    pipeline.delete_adapters.assert_called_once_with("lora_0")
+    pipeline.set_adapters.assert_called_once_with(["lora_1"], adapter_weights=[0.9])
+
+
+def test_generate_does_not_activate_adapters_when_all_loras_incompatible() -> None:
+    manager = _make_manager()
+    pipeline = MagicMock()
+    pipeline.lora_state_dict.return_value = ({}, {}, {})
+    pipeline.load_lora_into_unet.side_effect = ValueError("size mismatch")
+    manager._pipeline = pipeline
+    manager.set_sampler = MagicMock()
+
+    manager.generate(
+        prompt="a cat",
+        negative_prompt="",
+        steps=4,
+        cfg_scale=7.0,
+        width=64,
+        height=64,
+        sampler="euler_a",
+        seed=None,
+        loras=[LoraSpec(model_id="bad/lora", weight=1.0)],
+    )
+
+    pipeline.set_adapters.assert_not_called()
+
+
 def test_generate_unloads_loras_after_generation() -> None:
     manager = _make_manager()
     pipeline = MagicMock()

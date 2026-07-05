@@ -28,14 +28,31 @@
                       Margin="0,0,0,8" />
 
         <ListView Grid.Row="3" x:Name="ModelListView" Height="220"
-                  SelectionMode="Single" SelectionChanged="ModelListView_SelectionChanged">
+                  SelectionMode="Single" SelectionChanged="ModelListView_SelectionChanged"
+                  ScrollViewer.HorizontalScrollMode="Disabled"
+                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListView.ItemContainerStyle>
+                <!-- 項目をリスト幅いっぱいに広げ、長いモデル名を省略表示にして
+                     削除ボタンが右端からはみ出さないようにする。 -->
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="local:ModelListItem">
-                    <Grid ColumnDefinitions="*,Auto" Padding="0,4">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="0,4">
                         <TextBlock Grid.Column="0" Text="{x:Bind DisplayName}" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" MinWidth="0"
                                    ToolTipService.ToolTip="{x:Bind ModelId}" />
                         <FontIcon Grid.Column="1" Glyph="&#xE73E;" FontSize="14"
                                   VerticalAlignment="Center" Visibility="{x:Bind ActiveVisibility}" />
+                        <Button Grid.Column="2"
+                                Background="Transparent" BorderThickness="0" Padding="6"
+                                VerticalAlignment="Center" Visibility="{x:Bind RemoveVisibility}"
+                                Click="RemoveModelButton_Click" DataContext="{x:Bind}"
+                                ToolTipService.ToolTip="{x:Bind DisplayName}">
+                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                        </Button>
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>

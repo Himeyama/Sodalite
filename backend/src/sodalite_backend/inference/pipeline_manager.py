@@ -1,5 +1,6 @@
 """Loads and holds the active diffusers pipeline for inference."""
 
+import contextlib
 import gc
 from pathlib import Path
 
@@ -70,22 +71,24 @@ class PipelineManager:
         """Load the requested LoRAs onto the pipeline and activate them by weight.
 
         Each LoRA is loaded under a distinct adapter name so multiple can be
-        blended in one generation. The base checkpoint and the LoRA must share
-        the same architecture (SD1.5 vs SDXL); a mismatch surfaces as a load
-        error from diffusers.
+        blended in one generation. A LoRA whose architecture doesn't match the
+        active checkpoint (e.g. an SDXL LoRA left selected after switching to an
+        SD1.5 model) fails to load; that one is skipped so the rest still apply
+        and generation isn't aborted.
         """
         adapter_names: list[str] = []
         adapter_weights: list[float] = []
         for index, lora in enumerate(loras):
             adapter_name = f"lora_{index}"
-            self._load_single_lora(lora.model_id, adapter_name)
-            adapter_names.append(adapter_name)
-            adapter_weights.append(lora.weight)
+            if self._load_single_lora(lora.model_id, adapter_name):
+                adapter_names.append(adapter_name)
+                adapter_weights.append(lora.weight)
 
-        self._pipeline.set_adapters(adapter_names, adapter_weights=adapter_weights)
+        if adapter_names:
+            self._pipeline.set_adapters(adapter_names, adapter_weights=adapter_weights)
 
-    def _load_single_lora(self, model_id: str, adapter_name: str) -> None:
-        """Load one LoRA, tolerating text-encoder sub-weights diffusers can't parse.
+    def _load_single_lora(self, model_id: str, adapter_name: str) -> bool:
+        """Load one LoRA onto the pipeline, returning whether it was applied.
 
         The convenient `load_lora_weights` loads the UNet and both text encoders
         in one call, but diffusers 0.39 raises `IndexError` while inferring the
@@ -94,20 +97,30 @@ class PipelineManager:
         the whole load and surfaces as a 500. We instead drive the same pipeline
         loaders directly so the UNet and each text encoder are loaded
         independently, skipping only the text-encoder part diffusers chokes on.
+
+        Returns False (and unloads any partial state) when the LoRA is
+        incompatible with the active checkpoint, so the caller can move on.
         """
         pipeline = self._pipeline
-        state_dict, network_alphas, metadata = pipeline.lora_state_dict(
-            model_id, unet_config=pipeline.unet.config, return_lora_metadata=True
-        )
-
-        pipeline.load_lora_into_unet(
-            state_dict,
-            network_alphas=network_alphas,
-            unet=pipeline.unet,
-            adapter_name=adapter_name,
-            metadata=metadata,
-            _pipeline=pipeline,
-        )
+        try:
+            state_dict, network_alphas, metadata = pipeline.lora_state_dict(
+                model_id, unet_config=pipeline.unet.config, return_lora_metadata=True
+            )
+            pipeline.load_lora_into_unet(
+                state_dict,
+                network_alphas=network_alphas,
+                unet=pipeline.unet,
+                adapter_name=adapter_name,
+                metadata=metadata,
+                _pipeline=pipeline,
+            )
+        except (ValueError, RuntimeError, KeyError):
+            # Architecture mismatch (SD1.5 vs SDXL) or an unreadable checkpoint;
+            # drop just this half-registered adapter (leaving any already-applied
+            # LoRAs intact) and skip it.
+            with contextlib.suppress(ValueError, KeyError):
+                pipeline.delete_adapters(adapter_name)
+            return False
 
         text_encoders = [(pipeline.text_encoder, "text_encoder")]
         if getattr(pipeline, "text_encoder_2", None) is not None:
@@ -129,6 +142,8 @@ class PipelineManager:
                 # This LoRA carries no parseable weights for this text encoder;
                 # the UNet (and any other encoder) still applies, so skip it.
                 continue
+
+        return True
 
     def _clear_loras(self) -> None:
         """Remove any LoRA weights so they don't leak into later generations or model switches."""

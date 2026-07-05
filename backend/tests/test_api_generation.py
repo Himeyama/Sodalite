@@ -121,6 +121,48 @@ def test_list_models_includes_imported_models(client: TestClient, tmp_path) -> N
     assert str(checkpoint) in model_ids
 
 
+def test_remove_imported_model(client: TestClient, tmp_path) -> None:
+    checkpoint = tmp_path / "my-model.safetensors"
+    checkpoint.write_bytes(b"fake checkpoint data")
+    client.post("/api/v1/models/imported", json={"model_path": str(checkpoint)})
+
+    response = client.request(
+        "DELETE", "/api/v1/models/imported", json={"model_path": str(checkpoint)}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["model_id"] == str(checkpoint)
+    # Dropped from the registry but the file itself is left on disk.
+    assert checkpoint.exists()
+    model_ids = [model["model_id"] for model in client.get("/api/v1/models").json()]
+    assert str(checkpoint) not in model_ids
+
+
+def test_remove_imported_model_rejects_active_model(
+    client: TestClient, tmp_path, mock_pipeline_manager
+) -> None:
+    checkpoint = tmp_path / "active.safetensors"
+    checkpoint.write_bytes(b"fake checkpoint data")
+    client.post("/api/v1/models/imported", json={"model_path": str(checkpoint)})
+    mock_pipeline_manager.model_id = str(checkpoint)
+
+    response = client.request(
+        "DELETE", "/api/v1/models/imported", json={"model_path": str(checkpoint)}
+    )
+
+    assert response.status_code == 409
+
+
+def test_remove_imported_model_rejects_unknown_model(client: TestClient, tmp_path) -> None:
+    response = client.request(
+        "DELETE",
+        "/api/v1/models/imported",
+        json={"model_path": str(tmp_path / "never-imported.safetensors")},
+    )
+
+    assert response.status_code == 404
+
+
 def test_import_lora(client: TestClient, tmp_path) -> None:
     lora = tmp_path / "style.safetensors"
     lora.write_bytes(b"fake lora data")

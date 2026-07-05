@@ -99,6 +99,9 @@
   <data name="ModelSelectionDialog_ImportErrorTitle" xml:space="preserve">
     <value>モデルのインポートに失敗しました</value>
   </data>
+  <data name="ModelSelectionDialog_RemoveErrorTitle" xml:space="preserve">
+    <value>モデルの削除に失敗しました</value>
+  </data>
   <data name="ModelSelectionDialog_ModelHeader.Text" xml:space="preserve">
     <value>ベースモデル</value>
   </data>
