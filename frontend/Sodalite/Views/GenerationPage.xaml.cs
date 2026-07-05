@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Dispatching;
@@ -62,6 +63,9 @@ public sealed partial class GenerationPage : Page
 
     internal void AttachBackend(BackendApiClient apiClient) =>
         _ = _viewModel.AttachBackendAsync(apiClient, CancellationToken.None);
+
+    /// <summary>選択済み LoRA コレクション。モデル選択ダイアログがこれを直接編集する。</summary>
+    internal ObservableCollection<SelectedLoraViewModel> SelectedLoras => _viewModel.SelectedLoras;
 
     internal Task RefreshDeviceInfoAsync(BackendApiClient apiClient) =>
         _viewModel.RefreshDeviceInfoAsync(apiClient, CancellationToken.None);

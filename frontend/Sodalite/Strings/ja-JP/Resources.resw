@@ -99,6 +99,31 @@
   <data name="ModelSelectionDialog_ImportErrorTitle" xml:space="preserve">
     <value>モデルのインポートに失敗しました</value>
   </data>
+  <data name="ModelSelectionDialog_ModelHeader.Text" xml:space="preserve">
+    <value>ベースモデル</value>
+  </data>
+  <data name="ModelSelectionDialog_LoraHeader.Text" xml:space="preserve">
+    <value>LoRA</value>
+  </data>
+  <data name="ModelSelectionDialog_AddLoraButtonTooltip" xml:space="preserve">
+    <value>LoRA を追加</value>
+  </data>
+  <data name="ModelSelectionDialog_LoraEmpty.Text" xml:space="preserve">
+    <value>適用中の LoRA はありません。＋ボタンから追加できます。</value>
+  </data>
+  <data name="ModelSelectionDialog_ImportLoraItem.Text" xml:space="preserve">
+    <value>ローカルファイルからインポート...</value>
+  </data>
+
+  <data name="LoraSelectionDialog_LoadErrorTitle" xml:space="preserve">
+    <value>LoRA 一覧の取得に失敗しました</value>
+  </data>
+  <data name="LoraSelectionDialog_ImportButton.Content" xml:space="preserve">
+    <value>ローカルファイルからインポート...</value>
+  </data>
+  <data name="LoraSelectionDialog_ImportErrorTitle" xml:space="preserve">
+    <value>LoRA のインポートに失敗しました</value>
+  </data>
 
   <data name="Generation_PromptLabel.Text" xml:space="preserve">
     <value>プロンプト</value>

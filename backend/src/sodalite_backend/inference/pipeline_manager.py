@@ -12,7 +12,7 @@ from diffusers import (
 )
 
 from sodalite_backend.inference.samplers import SAMPLER_CLASSES
-from sodalite_backend.schemas.generation import Sampler
+from sodalite_backend.schemas.generation import LoraSpec, Sampler
 
 
 class PipelineManager:
@@ -66,6 +66,28 @@ class PipelineManager:
         scheduler_cls = SAMPLER_CLASSES[sampler]
         self._pipeline.scheduler = scheduler_cls.from_config(self._pipeline.scheduler.config)
 
+    def _apply_loras(self, loras: list[LoraSpec]) -> None:
+        """Load the requested LoRAs onto the pipeline and activate them by weight.
+
+        Each LoRA is loaded under a distinct adapter name so multiple can be
+        blended in one generation. The base checkpoint and the LoRA must share
+        the same architecture (SD1.5 vs SDXL); a mismatch surfaces as a load
+        error from diffusers.
+        """
+        adapter_names: list[str] = []
+        adapter_weights: list[float] = []
+        for index, lora in enumerate(loras):
+            adapter_name = f"lora_{index}"
+            self._pipeline.load_lora_weights(lora.model_id, adapter_name=adapter_name)
+            adapter_names.append(adapter_name)
+            adapter_weights.append(lora.weight)
+
+        self._pipeline.set_adapters(adapter_names, adapter_weights=adapter_weights)
+
+    def _clear_loras(self) -> None:
+        """Remove any LoRA weights so they don't leak into later generations or model switches."""
+        self._pipeline.unload_lora_weights()
+
     def generate(
         self,
         prompt: str,
@@ -76,19 +98,26 @@ class PipelineManager:
         height: int,
         sampler: Sampler,
         seed: int | None,
+        loras: list[LoraSpec] | None = None,
     ):
         self.set_sampler(sampler)
         generator = None
         if seed is not None:
             generator = torch.Generator(device=self.device).manual_seed(seed)
 
-        result = self._pipeline(
-            prompt=prompt,
-            negative_prompt=negative_prompt or None,
-            num_inference_steps=steps,
-            guidance_scale=cfg_scale,
-            width=width,
-            height=height,
-            generator=generator,
-        )
+        if loras:
+            self._apply_loras(loras)
+        try:
+            result = self._pipeline(
+                prompt=prompt,
+                negative_prompt=negative_prompt or None,
+                num_inference_steps=steps,
+                guidance_scale=cfg_scale,
+                width=width,
+                height=height,
+                generator=generator,
+            )
+        finally:
+            if loras:
+                self._clear_loras()
         return result.images[0]

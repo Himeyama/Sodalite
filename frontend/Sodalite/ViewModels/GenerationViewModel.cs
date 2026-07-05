@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -35,6 +36,8 @@ sealed class GenerationViewModel : INotifyPropertyChanged
     byte[]? _resultImageBytes;
     List<string> _samplers = [];
     string _deviceInfo = "";
+
+    public ObservableCollection<SelectedLoraViewModel> SelectedLoras { get; } = [];
 
     public GenerationViewModel(DispatcherQueue dispatcherQueue)
     {
@@ -197,6 +200,10 @@ sealed class GenerationViewModel : INotifyPropertyChanged
 
         try
         {
+            List<LoraSelection> loras = SelectedLoras
+                .Select(lora => new LoraSelection(lora.LoraId, lora.Weight))
+                .ToList();
+
             GenerationRequest request = new(
                 Prompt,
                 NegativePrompt,
@@ -205,7 +212,8 @@ sealed class GenerationViewModel : INotifyPropertyChanged
                 Width,
                 Height,
                 Sampler,
-                seed);
+                seed,
+                loras);
 
             GenerationResult result = await apiClient.GenerateTextToImageAsync(request, ct).ConfigureAwait(false);
 

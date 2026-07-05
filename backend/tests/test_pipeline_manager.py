@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 from sodalite_backend.inference.pipeline_manager import PipelineManager
+from sodalite_backend.schemas.generation import LoraSpec
 
 
 def _make_manager() -> PipelineManager:
@@ -63,3 +64,70 @@ def test_load_model_falls_back_to_sd15_when_sdxl_load_fails(tmp_path) -> None:
 
         mock_sd15.from_single_file.assert_called_once()
         assert manager.model_id == str(checkpoint)
+
+
+def test_generate_loads_and_activates_loras_by_weight() -> None:
+    manager = _make_manager()
+    pipeline = MagicMock()
+    manager._pipeline = pipeline
+    manager.set_sampler = MagicMock()
+
+    manager.generate(
+        prompt="a cat",
+        negative_prompt="",
+        steps=4,
+        cfg_scale=7.0,
+        width=64,
+        height=64,
+        sampler="euler_a",
+        seed=None,
+        loras=[LoraSpec(model_id="a/lora", weight=0.8), LoraSpec(model_id="b/lora", weight=0.3)],
+    )
+
+    assert pipeline.load_lora_weights.call_count == 2
+    pipeline.set_adapters.assert_called_once_with(
+        ["lora_0", "lora_1"], adapter_weights=[0.8, 0.3]
+    )
+
+
+def test_generate_unloads_loras_after_generation() -> None:
+    manager = _make_manager()
+    pipeline = MagicMock()
+    manager._pipeline = pipeline
+    manager.set_sampler = MagicMock()
+
+    manager.generate(
+        prompt="a cat",
+        negative_prompt="",
+        steps=4,
+        cfg_scale=7.0,
+        width=64,
+        height=64,
+        sampler="euler_a",
+        seed=None,
+        loras=[LoraSpec(model_id="a/lora", weight=1.0)],
+    )
+
+    pipeline.unload_lora_weights.assert_called_once()
+
+
+def test_generate_without_loras_does_not_touch_lora_apis() -> None:
+    manager = _make_manager()
+    pipeline = MagicMock()
+    manager._pipeline = pipeline
+    manager.set_sampler = MagicMock()
+
+    manager.generate(
+        prompt="a cat",
+        negative_prompt="",
+        steps=4,
+        cfg_scale=7.0,
+        width=64,
+        height=64,
+        sampler="euler_a",
+        seed=None,
+    )
+
+    pipeline.load_lora_weights.assert_not_called()
+    pipeline.set_adapters.assert_not_called()
+    pipeline.unload_lora_weights.assert_not_called()

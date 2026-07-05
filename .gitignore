@@ -31,3 +31,4 @@ CLAUDE.md
 output/*.png
 outputs/*.png
 docs/stable-diffusion-webui-setup-notes.md
+imported*.json

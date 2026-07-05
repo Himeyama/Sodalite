@@ -101,10 +101,18 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        ModelSelectionDialog dialog = new(apiClient, this) { XamlRoot = Content.XamlRoot };
+        if (RootFrame.Content is not GenerationPage generationPage)
+        {
+            return;
+        }
+
+        ModelSelectionDialog dialog = new(apiClient, this, generationPage.SelectedLoras)
+        {
+            XamlRoot = Content.XamlRoot,
+        };
         await dialog.ShowAsync();
 
-        if (dialog.SelectedModelId is not null && RootFrame.Content is GenerationPage generationPage)
+        if (dialog.SelectedModelId is not null)
         {
             await generationPage.RefreshDeviceInfoAsync(apiClient);
         }

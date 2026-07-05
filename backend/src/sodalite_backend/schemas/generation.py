@@ -9,6 +9,18 @@ Sampler = Literal["euler_a", "euler", "dpmpp_2m", "ddim", "lms"]
 JobStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 
 
+class LoraSpec(BaseModel):
+    """A LoRA to apply during generation, identified the same way as a base model.
+
+    `model_id` is either a Hugging Face repo id or an absolute path to a
+    single-file `.safetensors` LoRA. `weight` scales its influence; negative
+    values invert the effect.
+    """
+
+    model_id: str
+    weight: float = Field(default=1.0, ge=-2.0, le=2.0)
+
+
 class TextToImageRequest(BaseModel):
     prompt: str
     negative_prompt: str = ""
@@ -18,6 +30,7 @@ class TextToImageRequest(BaseModel):
     height: int = Field(default=512, ge=64, le=2048, multiple_of=8)
     sampler: Sampler = "euler_a"
     seed: int | None = None
+    loras: list[LoraSpec] = Field(default_factory=list)
 
 
 class GenerationJob(BaseModel):
@@ -42,3 +55,14 @@ class SetActiveModelRequest(BaseModel):
 
 class ImportModelRequest(BaseModel):
     model_path: str
+
+
+class LoraFileInfo(BaseModel):
+    """A LoRA file available locally, identified by its absolute path."""
+
+    lora_id: str
+    size_on_disk_bytes: int
+
+
+class ImportLoraRequest(BaseModel):
+    lora_path: str

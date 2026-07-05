@@ -6,23 +6,28 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="using:Sodalite.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:Sodalite.ViewModels"
     x:Uid="ModelSelectionDialog"
     DefaultButton="Close"
     Style="{StaticResource DefaultContentDialogStyle}"
     mc:Ignorable="d">
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" MinWidth="420" MinHeight="320">
-        <TextBlock Grid.Row="0" x:Uid="ModelSelectionDialog_Description"
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" MinWidth="440">
+        <TextBlock Grid.Row="0" x:Uid="ModelSelectionDialog_ModelHeader"
+                   Style="{ThemeResource BodyStrongTextBlockStyle}" Margin="0,0,0,4" />
+
+        <TextBlock Grid.Row="1" x:Uid="ModelSelectionDialog_Description"
                    Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.7"
                    Margin="0,0,0,8" TextWrapping="Wrap" />
 
-        <InfoBar Grid.Row="1" x:Name="ErrorInfoBar" Severity="Error" IsOpen="False"
+        <InfoBar Grid.Row="2" x:Name="ErrorInfoBar" Severity="Error" IsOpen="False"
                  Margin="0,0,0,8" />
 
-        <ProgressRing Grid.Row="2" x:Name="LoadingProgressRing" IsActive="False"
-                      HorizontalAlignment="Left" Width="24" Height="24" Margin="0,0,0,8" />
+        <ProgressRing Grid.Row="3" x:Name="LoadingProgressRing" IsActive="False"
+                      HorizontalAlignment="Left" VerticalAlignment="Top" Width="24" Height="24"
+                      Margin="0,0,0,8" />
 
-        <ListView Grid.Row="3" x:Name="ModelListView"
+        <ListView Grid.Row="3" x:Name="ModelListView" Height="220"
                   SelectionMode="Single" SelectionChanged="ModelListView_SelectionChanged">
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="local:ModelListItem">
@@ -39,5 +44,47 @@
         <Button Grid.Row="4" x:Uid="ModelSelectionDialog_ImportButton"
                 HorizontalAlignment="Stretch" Margin="0,8,0,0"
                 Click="ImportButton_Click" />
+
+        <Grid Grid.Row="5" ColumnDefinitions="*,Auto" Margin="0,20,0,4">
+            <TextBlock Grid.Column="0" x:Uid="ModelSelectionDialog_LoraHeader"
+                       Style="{ThemeResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
+            <Button Grid.Column="1" x:Name="AddLoraButton">
+                <FontIcon Glyph="&#xE710;" FontSize="14" />
+                <Button.Flyout>
+                    <MenuFlyout x:Name="AddLoraMenuFlyout">
+                        <MenuFlyoutItem x:Name="ImportLoraMenuItem" x:Uid="ModelSelectionDialog_ImportLoraItem"
+                                        Click="ImportLoraMenuItem_Click" />
+                    </MenuFlyout>
+                </Button.Flyout>
+            </Button>
+        </Grid>
+
+        <TextBlock Grid.Row="6" x:Uid="ModelSelectionDialog_LoraEmpty" x:Name="LoraEmptyTextBlock"
+                   Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.5"
+                   Margin="0,4,0,0" />
+
+        <ItemsControl Grid.Row="7" x:Name="SelectedLoraItemsControl">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SelectedLoraViewModel">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"
+                                       ToolTipService.ToolTip="{Binding LoraId}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <Slider Grid.Column="0" Minimum="-2" Maximum="2" StepFrequency="0.05"
+                                        Value="{Binding Weight, Mode=TwoWay}" />
+                                <TextBlock Grid.Column="1" Width="36" TextAlignment="Right"
+                                           VerticalAlignment="Center" Opacity="0.7"
+                                           Text="{Binding WeightText}" />
+                            </Grid>
+                        </StackPanel>
+                        <Button Grid.Column="1" VerticalAlignment="Top"
+                                Click="RemoveLoraButton_Click" DataContext="{Binding}">
+                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                        </Button>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
     </Grid>
 </ContentDialog>

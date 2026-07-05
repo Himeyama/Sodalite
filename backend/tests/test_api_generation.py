@@ -119,3 +119,60 @@ def test_list_models_includes_imported_models(client: TestClient, tmp_path) -> N
     assert response.status_code == 200
     model_ids = [model["model_id"] for model in response.json()]
     assert str(checkpoint) in model_ids
+
+
+def test_import_lora(client: TestClient, tmp_path) -> None:
+    lora = tmp_path / "style.safetensors"
+    lora.write_bytes(b"fake lora data")
+
+    response = client.post("/api/v1/loras/imported", json={"lora_path": str(lora)})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["lora_id"] == str(lora)
+    assert body["size_on_disk_bytes"] == lora.stat().st_size
+
+
+def test_import_lora_rejects_missing_file(client: TestClient, tmp_path) -> None:
+    missing = tmp_path / "does-not-exist.safetensors"
+
+    response = client.post("/api/v1/loras/imported", json={"lora_path": str(missing)})
+
+    assert response.status_code == 422
+
+
+def test_import_lora_rejects_unsupported_extension(client: TestClient, tmp_path) -> None:
+    unsupported = tmp_path / "style.ckpt"
+    unsupported.write_bytes(b"not a lora")
+
+    response = client.post("/api/v1/loras/imported", json={"lora_path": str(unsupported)})
+
+    assert response.status_code == 422
+
+
+def test_list_loras_includes_imported_loras(client: TestClient, tmp_path) -> None:
+    lora = tmp_path / "style.safetensors"
+    lora.write_bytes(b"fake lora data")
+    client.post("/api/v1/loras/imported", json={"lora_path": str(lora)})
+
+    response = client.get("/api/v1/loras")
+
+    assert response.status_code == 200
+    lora_ids = [item["lora_id"] for item in response.json()]
+    assert str(lora) in lora_ids
+
+
+def test_text_to_image_forwards_loras(client: TestClient, mock_pipeline_manager) -> None:
+    response = client.post(
+        "/api/v1/generations/text-to-image",
+        json={
+            "prompt": "a cat",
+            "steps": 4,
+            "loras": [{"model_id": "some/lora", "weight": 0.8}],
+        },
+    )
+
+    assert response.status_code == 200
+    _, kwargs = mock_pipeline_manager.generate.call_args
+    assert [lora.model_id for lora in kwargs["loras"]] == ["some/lora"]
+    assert [lora.weight for lora in kwargs["loras"]] == [0.8]

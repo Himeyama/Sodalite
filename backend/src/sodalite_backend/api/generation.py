@@ -29,6 +29,7 @@ def create_text_to_image(request: Request, body: TextToImageRequest) -> Generati
         height=body.height,
         sampler=body.sampler,
         seed=body.seed,
+        loras=body.loras,
     )
 
     image_path = new_image_path()

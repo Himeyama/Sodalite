@@ -14,6 +14,10 @@ sealed class BackendApiClient(int port) : IDisposable
 
     public async Task<GenerationResult> GenerateTextToImageAsync(GenerationRequest request, CancellationToken ct)
     {
+        List<LoraBody> loras = request.Loras?
+            .Select(lora => new LoraBody(lora.ModelId, lora.Weight))
+            .ToList() ?? [];
+
         TextToImageBody body = new(
             request.Prompt,
             request.NegativePrompt,
@@ -22,7 +26,8 @@ sealed class BackendApiClient(int port) : IDisposable
             request.Width,
             request.Height,
             request.Sampler,
-            request.Seed);
+            request.Seed,
+            loras);
 
         HttpResponseMessage response = await _http
             .PostAsJsonAsync("/api/v1/generations/text-to-image", body, ct)
@@ -88,6 +93,27 @@ sealed class BackendApiClient(int port) : IDisposable
         return new ModelInfo(dto.ModelId, dto.IsActive, dto.SizeOnDiskBytes);
     }
 
+    public async Task<List<LoraFileInfo>> GetLorasAsync(CancellationToken ct)
+    {
+        List<LoraDto>? dtos = await _http.GetFromJsonAsync<List<LoraDto>>("/api/v1/loras", ct).ConfigureAwait(false);
+        return dtos?.Select(dto => new LoraFileInfo(dto.LoraId, dto.SizeOnDiskBytes)).ToList() ?? [];
+    }
+
+    public async Task<LoraFileInfo> ImportLoraAsync(string loraPath, CancellationToken ct)
+    {
+        HttpResponseMessage response = await _http
+            .PostAsJsonAsync("/api/v1/loras/imported", new ImportLoraBody(loraPath), ct)
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        LoraDto dto = await response.Content
+            .ReadFromJsonAsync<LoraDto>(ct)
+            .ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Empty response from backend.");
+
+        return new LoraFileInfo(dto.LoraId, dto.SizeOnDiskBytes);
+    }
+
     public void Dispose() => _http.Dispose();
 
     sealed record TextToImageBody(
@@ -98,7 +124,10 @@ sealed class BackendApiClient(int port) : IDisposable
         int Width,
         int Height,
         string Sampler,
-        long? Seed);
+        long? Seed,
+        List<LoraBody> Loras);
+
+    sealed record LoraBody([property: JsonPropertyName("model_id")] string ModelId, double Weight);
 
     sealed record GenerationJobDto(
         [property: JsonPropertyName("job_id")] string JobId,
@@ -119,6 +148,12 @@ sealed class BackendApiClient(int port) : IDisposable
     sealed record SetActiveModelBody([property: JsonPropertyName("model_id")] string ModelId);
 
     sealed record ImportModelBody([property: JsonPropertyName("model_path")] string ModelPath);
+
+    sealed record LoraDto(
+        [property: JsonPropertyName("lora_id")] string LoraId,
+        [property: JsonPropertyName("size_on_disk_bytes")] long SizeOnDiskBytes);
+
+    sealed record ImportLoraBody([property: JsonPropertyName("lora_path")] string LoraPath);
 }
 
 sealed record HealthInfo(string Status, string Device, string LoadedModel);
