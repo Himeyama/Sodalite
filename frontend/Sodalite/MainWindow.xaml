@@ -16,7 +16,8 @@
         <Grid x:Name="TitleBarGrid" Grid.Row="0" Height="48" Background="Transparent">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
                         Margin="16,0,0,0" Spacing="8">
-                <FontIcon Glyph="&#xE91B;" FontSize="16" VerticalAlignment="Center" />
+                <Image Source="ms-appx:///Assets/AppIcon.ico" Width="16" Height="16"
+                       VerticalAlignment="Center" />
                 <TextBlock x:Uid="MainWindow_TitleBarText" Style="{ThemeResource CaptionTextBlockStyle}"
                            VerticalAlignment="Center" />
             </StackPanel>
