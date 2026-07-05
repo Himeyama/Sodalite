@@ -1,4 +1,4 @@
-# Sodalite
+<h1><img src="docs/icon.png" height="24" />&nbsp;Sodalite</h1>
 
 Stable Diffusion 画像生成デスクトップアプリ。一から独自実装したもの。
 
