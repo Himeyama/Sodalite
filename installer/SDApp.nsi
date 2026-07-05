@@ -28,9 +28,9 @@ Unicode true
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
 OutFile "${DIST_DIR}\${PRODUCT_NAME}-Setup-${PRODUCT_VERSION}.exe"
-InstallDir "$PROGRAMFILES64\${PRODUCT_NAME}"
-InstallDirRegKey HKLM "${UNINSTALL_KEY}" "InstallLocation"
-RequestExecutionLevel admin
+InstallDir "$LOCALAPPDATA\Programs\${PRODUCT_NAME}"
+InstallDirRegKey HKCU "${UNINSTALL_KEY}" "InstallLocation"
+RequestExecutionLevel user
 SetCompressor /SOLID lzma
 
 ;--------------------------------
@@ -81,16 +81,16 @@ Section "SDApp" SecMain
   ; アンインストーラー生成
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  ; 「アプリと機能」に表示するための Uninstall レジストリ登録
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayName" "${PRODUCT_NAME}"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\app\${PRODUCT_EXE}"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "UninstallString" "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "QuietUninstallString" "$INSTDIR\Uninstall.exe /S"
-  WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoModify" 1
-  WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoRepair" 1
+  ; 「アプリと機能」に表示するための Uninstall レジストリ登録 (ユーザーインストールなので HKCU へ)
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "${PRODUCT_NAME}"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\app\${PRODUCT_EXE}"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" "$INSTDIR\Uninstall.exe"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "QuietUninstallString" "$INSTDIR\Uninstall.exe /S"
+  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
+  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
 SectionEnd
 
 ;--------------------------------
@@ -107,7 +107,7 @@ Section "Uninstall"
   RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
 
-  DeleteRegKey HKLM "${UNINSTALL_KEY}"
+  DeleteRegKey HKCU "${UNINSTALL_KEY}"
 
   ; アプリ情報をすべて消去する。%LOCALAPPDATA%\SDApp には仮想環境 (.venv)・.venv-ready
   ; マーカー・設定・生成画像・HF キャッシュが入っており、アンインストールでこれらも消す。
