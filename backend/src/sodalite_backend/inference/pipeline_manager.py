@@ -78,11 +78,57 @@ class PipelineManager:
         adapter_weights: list[float] = []
         for index, lora in enumerate(loras):
             adapter_name = f"lora_{index}"
-            self._pipeline.load_lora_weights(lora.model_id, adapter_name=adapter_name)
+            self._load_single_lora(lora.model_id, adapter_name)
             adapter_names.append(adapter_name)
             adapter_weights.append(lora.weight)
 
         self._pipeline.set_adapters(adapter_names, adapter_weights=adapter_weights)
+
+    def _load_single_lora(self, model_id: str, adapter_name: str) -> None:
+        """Load one LoRA, tolerating text-encoder sub-weights diffusers can't parse.
+
+        The convenient `load_lora_weights` loads the UNet and both text encoders
+        in one call, but diffusers 0.39 raises `IndexError` while inferring the
+        rank of some community LoRAs whose text-encoder keys it fails to match
+        (e.g. LoRAs trained only against one of SDXL's two encoders). That aborts
+        the whole load and surfaces as a 500. We instead drive the same pipeline
+        loaders directly so the UNet and each text encoder are loaded
+        independently, skipping only the text-encoder part diffusers chokes on.
+        """
+        pipeline = self._pipeline
+        state_dict, network_alphas, metadata = pipeline.lora_state_dict(
+            model_id, unet_config=pipeline.unet.config, return_lora_metadata=True
+        )
+
+        pipeline.load_lora_into_unet(
+            state_dict,
+            network_alphas=network_alphas,
+            unet=pipeline.unet,
+            adapter_name=adapter_name,
+            metadata=metadata,
+            _pipeline=pipeline,
+        )
+
+        text_encoders = [(pipeline.text_encoder, "text_encoder")]
+        if getattr(pipeline, "text_encoder_2", None) is not None:
+            text_encoders.append((pipeline.text_encoder_2, "text_encoder_2"))
+
+        for text_encoder, prefix in text_encoders:
+            try:
+                pipeline.load_lora_into_text_encoder(
+                    state_dict,
+                    network_alphas=network_alphas,
+                    text_encoder=text_encoder,
+                    prefix=prefix,
+                    lora_scale=pipeline.lora_scale,
+                    adapter_name=adapter_name,
+                    metadata=metadata,
+                    _pipeline=pipeline,
+                )
+            except IndexError:
+                # This LoRA carries no parseable weights for this text encoder;
+                # the UNet (and any other encoder) still applies, so skip it.
+                continue
 
     def _clear_loras(self) -> None:
         """Remove any LoRA weights so they don't leak into later generations or model switches."""
