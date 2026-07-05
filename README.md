@@ -6,6 +6,18 @@ Stable Diffusion 画像生成デスクトップアプリ。一から独自実装
 - **バックエンド**: Python 3.13+ / FastAPI / diffusers (uv管理)
 - **通信方式**: フロントエンドがバックエンドをローカルサブプロセスとして起動し、HTTP経由で通信する
 
+## ダウンロードとインストール
+
+- `uv` コマンドの Windows 版インストールが必要です。  
+  https://docs.astral.sh/uv/#installation
+
+- [Releases](https://github.com/Himeyama/Sodalite/releases) から、最新版の EXE ファイルをダウンロードしてください。  
+  個人開発アプリのためブラウザで一時ブロックされますが、「⋯」→「保存」→「削除」ボタンの「∨」→「保持する」から保存可能です。
+
+  <img src="docs\download-save-app.png" width="200" />
+
+  セキュリティー上、インストーラーは [Actions](https://github.com/Himeyama/Sodalite/actions) から自動作成してます。
+
 ## ディレクトリ構成
 
 ```
