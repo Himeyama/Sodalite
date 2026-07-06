@@ -148,3 +148,12 @@ The backend provides a purpose-built REST API (`/api/v1/*`).
 | POST | `/api/v1/generations/text-to-image` | txt2img generation |
 
 See `backend/src/sodalite_backend/api/` for details.
+
+## Disclaimer
+
+- This app is a tool for running image-generation models. The author bears no responsibility whatsoever for the content, use, or distribution of generated images. Use of generated content is entirely at the user's own responsibility.
+- Generated images are subject to the license of the model used (terms of use, prohibited uses, etc., as stated in the model card). Whether commercial use, redistribution, or NSFW content is permitted varies by model, so always check the license terms of the model you use before generating.
+- Generated images may resemble or infringe upon existing copyrighted works, trademarks, or likeness rights, whether via the prompt or the training data. When publishing, distributing, or commercially using generated content, users are responsible for confirming that it does not infringe the rights of third parties.
+- Generating images that imitate or evoke existing characters or other IP (intellectual property) from anime, games, movies, and the like can also infringe copyright or trademark rights. In particular, commercial use, redistribution, or sexual depictions not authorized by the rights holder of that IP may constitute infringement or a violation of platform terms, so users are responsible for making their own judgment.
+- Generating or using images depicting real individuals (impersonation, defamation, unauthorized use in a sexual context, etc.) may violate the laws of your jurisdiction or the terms of the platforms you use. Compliance with applicable laws and terms of service is the user's responsibility.
+- Generating, possessing, or distributing content prohibited by law is strictly forbidden.
