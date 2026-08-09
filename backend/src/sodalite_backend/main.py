@@ -9,10 +9,12 @@ from fastapi.staticfiles import StaticFiles
 
 from sodalite_backend.api.router import api_router
 from sodalite_backend.config import load_config
-from sodalite_backend.imaging.storage import OUTPUT_DIR
+from sodalite_backend.imaging.storage import output_dir
 from sodalite_backend.inference.job_manager import JobManager
 from sodalite_backend.inference.known_hf_models_store import add_known_hf_model_id
 from sodalite_backend.inference.pipeline_manager import PipelineManager
+
+WEBUI_DIR = Path(__file__).parent / "webui"
 
 
 def create_app(model_id: str) -> FastAPI:
@@ -29,8 +31,12 @@ def create_app(model_id: str) -> FastAPI:
     app = FastAPI(title="Sodalite Backend", lifespan=lifespan)
     app.include_router(api_router)
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    app.mount("/api/v1/images", StaticFiles(directory=OUTPUT_DIR), name="images")
+    app.mount("/api/v1/images", StaticFiles(directory=output_dir()), name="images")
+
+    # Serve the browser webui from the app root. Mounting "/" swallows every
+    # unmatched path, so this must come last, after the API router and the
+    # images mount above. `html=True` serves index.html for "/".
+    app.mount("/", StaticFiles(directory=WEBUI_DIR, html=True), name="webui")
 
     return app
 

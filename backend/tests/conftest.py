@@ -20,7 +20,9 @@ def mock_pipeline_manager() -> MagicMock:
 
 @pytest.fixture
 def client(mock_pipeline_manager: MagicMock, tmp_path, monkeypatch) -> Iterator[TestClient]:
-    monkeypatch.chdir(tmp_path)
+    # Point the shared data dir (gallery outputs, settings, known models) at a
+    # temp dir so each test is isolated. output_dir() resolves to tmp_path/outputs.
+    monkeypatch.setenv("SODALITE_DATA_DIR", str(tmp_path))
 
     from sodalite_backend import main as main_module
 

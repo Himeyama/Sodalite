@@ -37,7 +37,7 @@ def _pipeline_repo(repo_id: str, size: int = 100) -> _FakeRepo:
 
 @pytest.fixture(autouse=True)
 def _isolate_store(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SODALITE_DATA_DIR", str(tmp_path))
 
 
 def _patch_cache(*repos: _FakeRepo):

@@ -9,6 +9,7 @@ Stable Diffusion 画像生成デスクトップアプリ。一から独自実装
 - **フロントエンド**: WinUI3 (.NET 9 / Windows App SDK)
 - **バックエンド**: Python 3.13+ / FastAPI / diffusers (uv管理)
 - **通信方式**: フロントエンドがバックエンドをローカルサブプロセスとして起動し、HTTP経由で通信する
+- **ブラウザ webui**: WinUI3 を使わず、バックエンド単体をブラウザ用 UI 付きで起動できる (LAN内の他デバイスからアクセス可能。[後述](#ブラウザ-webui-lanアクセス))
 - セーフティチェッカーは無効化しており、🔞NSFW 画像の生成も可能。生成物の利用・公開は各自の責任・使用モデルのライセンス・居住地の法令に従うこと。
 
 ## ダウンロードとインストール
@@ -35,7 +36,8 @@ Sodalite/
 │   │   ├── api/                # REST APIエンドポイント
 │   │   ├── schemas/            # Pydanticリクエスト/レスポンスモデル
 │   │   ├── inference/           # diffusersパイプライン管理・サンプラー
-│   │   └── imaging/            # PNGメタデータ埋め込み・画像保存
+│   │   ├── imaging/            # PNGメタデータ埋め込み・画像保存
+│   │   └── webui/              # ブラウザ用UI (HTML/JS/CSS, 静的配信)
 │   └── tests/
 ├── frontend/Sodalite/    # WinUI3フロントエンド
 │   ├── MainWindow.xaml(.cs)    # バックエンド起動・ナビゲーション
@@ -45,6 +47,7 @@ Sodalite/
 ├── docs/               # セットアップ記録等のドキュメント
 ├── skills/             # 開発規約 (winui3-app, python-coding)
 ├── run.ps1             # アプリ起動スクリプト(ルート)
+├── run-webui.ps1       # ブラウザ webui 起動スクリプト(LANアクセス)
 └── CLAUDE.md
 ```
 
@@ -84,6 +87,28 @@ cd backend
 # 別ターミナルで
 curl http://localhost:8000/api/v1/health
 ```
+
+## ブラウザ webui (LANアクセス)
+
+WinUI3 アプリを使わず、バックエンド単体をブラウザ用 UI 付きで起動できる。API と UI を
+同一プロセス (同一オリジン) で配信するため、**同一LAN内のスマホ・タブレット・別PCの
+ブラウザから画像生成を操作できる**。
+
+```powershell
+# ルートで実行 (uv sync + 0.0.0.0 バインドで起動)
+./run-webui.ps1
+# ポートを変える場合
+./run-webui.ps1 -Port 9000
+```
+
+起動するとコンソールにアクセスURL (このPC用 `http://127.0.0.1:8188/` と
+LAN用 `http://<このPCのIP>:8188/`) が表示される。他デバイスのブラウザでLAN用URLを開く。
+
+> [!WARNING]
+> webui は **無認証** で `0.0.0.0` にバインドされ、同一LAN内の誰でもアクセスできる。
+> **信頼できるネットワークでのみ使用すること。** インターネットに直接公開しないこと。
+> 他デバイスから接続できない場合、Windows ファイアウォールで当該ポート (既定 8188) の
+> 受信を許可する必要がある。
 
 ## 開発
 

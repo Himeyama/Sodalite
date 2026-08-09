@@ -16,10 +16,18 @@ DEFAULT_MODEL_ID = "stabilityai/sd-turbo"
 
 
 def load_config() -> AppConfig:
-    """Build config from CLI args, falling back to the SODALITE_PORT env var."""
+    """Build config from CLI args, falling back to the SODALITE_PORT env var.
+
+    `--webui` only affects the default host: browser access from other LAN
+    devices needs a non-loopback bind, so an unspecified host becomes
+    ``0.0.0.0`` in that mode. The WinUI3 frontend never passes ``--webui`` and
+    keeps binding to loopback. An explicit ``--host`` always wins.
+    """
     parser = argparse.ArgumentParser(prog="sodalite-backend")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=int(os.environ.get("SODALITE_PORT", "8000")))
     parser.add_argument("--model-id", default=DEFAULT_MODEL_ID)
+    parser.add_argument("--webui", action="store_true")
     args = parser.parse_args()
-    return AppConfig(host=args.host, port=args.port, model_id=args.model_id)
+    host = args.host if args.host is not None else ("0.0.0.0" if args.webui else "127.0.0.1")
+    return AppConfig(host=host, port=args.port, model_id=args.model_id)

@@ -1,0 +1,717 @@
+/* テーマは OS 設定 (prefers-color-scheme) に準拠する。
+   :root はダーク値をデフォルトにし、ライト時に上書きする。 */
+:root {
+  color-scheme: light dark;
+  --bg: #202020;
+  --layer: #2b2b2b;
+  --card: #333333;
+  --card-2: #3a3a3a;
+  --border: #404040;
+  --text: #ffffff;
+  --muted: #cfcfcf;
+  --subtle: #a0a0a0;
+  --accent: #4cc2ff;
+  --accent-text: #003547;
+  --danger: #ff99a4;
+  --radius: 8px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f3f3f3;
+    --layer: #ffffff;
+    --card: #ffffff;
+    --card-2: #f5f5f5;
+    --border: #e0e0e0;
+    --text: #1a1a1a;
+    --muted: #444444;
+    --subtle: #767676;
+    --accent: #005fb8;
+    --accent-text: #ffffff;
+    --danger: #c42b1c;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  overflow: hidden;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: 40px 1fr 40px;
+  height: 100vh;
+  /* モバイルブラウザのアドレスバーを除いた実表示高さ。100vh はアドレスバーを
+     含むため下部(ステータスバー)が見切れる。dvh 対応ブラウザでは上書きされる。 */
+  height: 100dvh;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* --- タイトルバー --- */
+.titlebar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.app-title {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ハンバーガーはスマホ幅でのみ表示 (下のメディアクエリで解除) */
+.menu-toggle {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 8px;
+}
+
+.menu-toggle:hover {
+  background: transparent;
+}
+
+.menu {
+  position: absolute;
+  top: 100%;
+  left: 8px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  background: var(--layer);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.menu[hidden] {
+  display: none;
+}
+
+.menu-item {
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 10px 12px;
+  border-radius: 4px;
+}
+
+.menu-item:hover {
+  background: var(--card-2);
+}
+
+.menu-item.active {
+  color: var(--accent);
+}
+
+/* --- ビューポート (横スライド切替) --- */
+.viewport {
+  position: relative;
+  overflow: hidden;
+}
+
+.view {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.25s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* 各ビューは重なり合うため背景を敷き、下のビューが透けないようにする。 */
+  background: var(--bg);
+}
+
+.view-active {
+  transform: translateX(0);
+}
+
+.view-right {
+  transform: translateX(100%);
+}
+
+.view-left {
+  transform: translateX(-30%);
+}
+
+/* --- 生成ビュー --- */
+.generation {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 20px;
+  padding: 20px;
+  min-height: 0;
+}
+
+.generation > * {
+  min-width: 0;
+}
+
+.params {
+  overflow-y: auto;
+  padding-right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* grid/flex の子は既定で min-width:auto のため、中身(長い文字列や幅100%の入力)が
+   トラックを押し広げて横スクロールを生む。子を縮められるようにして幅崩れを防ぐ。 */
+.params > * {
+  min-width: 0;
+}
+
+.row2 > *,
+.row3 > * {
+  min-width: 0;
+}
+
+.field-label {
+  font-weight: 600;
+  margin-top: 8px;
+  display: block;
+}
+
+.field-label .value {
+  font-weight: 400;
+  color: var(--subtle);
+  margin-left: 6px;
+}
+
+textarea,
+input,
+select {
+  width: 100%;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input[type="range"] {
+  padding: 0;
+  accent-color: var(--accent);
+  background: transparent;
+  border: none;
+}
+
+.row2,
+.row3 {
+  display: grid;
+  gap: 12px;
+}
+
+.row2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.row3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.lora-section {
+  margin-top: 8px;
+}
+
+.lora-section summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+.loras {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.lora-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.lora-item .lora-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lora-item .lora-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.lora-item .lora-weight {
+  display: none;
+  margin-top: 8px;
+  align-items: center;
+  gap: 8px;
+}
+
+.lora-item.enabled .lora-weight {
+  display: flex;
+}
+
+.lora-item .lora-weight input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+button {
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--card-2);
+}
+
+button:hover {
+  background: var(--border);
+}
+
+button.accent {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+button.accent:hover {
+  filter: brightness(1.08);
+}
+
+button.cancel {
+  color: var(--danger);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+#generate,
+#cancel {
+  margin-top: 12px;
+}
+
+/* --- 結果カード --- */
+.result-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.result-card img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  cursor: zoom-in;
+}
+
+.placeholder {
+  color: var(--subtle);
+}
+
+.placeholder.center {
+  align-self: center;
+  margin: auto;
+}
+
+/* --- ページヘッダ (ギャラリー/モデル) --- */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 0;
+}
+
+.page-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.back {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  padding: 6px 10px;
+}
+
+.back:hover {
+  background: var(--border);
+}
+
+.page-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- ギャラリー --- */
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  align-content: start;
+}
+
+.gallery-item {
+  aspect-ratio: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* --- ディレクトリ設定 --- */
+.dir-setting {
+  margin-bottom: 16px;
+}
+
+.dir-row {
+  display: flex;
+  gap: 8px;
+}
+
+.dir-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dir-row button {
+  flex: 0 0 auto;
+}
+
+.section-label {
+  display: block;
+  font-weight: 600;
+  margin: 12px 0 8px;
+}
+
+/* --- モデル一覧 --- */
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.model-list .empty {
+  color: var(--subtle);
+  padding: 8px 0;
+}
+
+.model-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.model-item:hover {
+  background: var(--card-2);
+}
+
+.model-item .check {
+  width: 16px;
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.model-item .model-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-item .model-size {
+  flex: 0 0 auto;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+/* --- ステータスバー --- */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--layer);
+  border-top: 1px solid var(--border);
+}
+
+.status-text {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.statusbar-link {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 2px;
+}
+
+.statusbar-link:hover {
+  background: transparent;
+  color: var(--accent);
+}
+
+.statusbar-link.muted {
+  color: var(--subtle);
+}
+
+/* --- ライトボックス --- */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.lightbox[hidden] {
+  display: none;
+}
+
+.lightbox-inner {
+  display: flex;
+  gap: 20px;
+  max-width: 95vw;
+  max-height: 90vh;
+  background: var(--layer);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.lightbox-inner img {
+  max-width: 60vw;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.lightbox-meta {
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.lightbox-meta pre {
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lightbox-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --- レスポンシブ: タブレット (縦積みだがゆとりを残す) --- */
+@media (max-width: 1000px) {
+  .generation {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(280px, 1fr);
+    overflow-y: auto;
+  }
+
+  .params {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .gallery {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+}
+
+/* --- レスポンシブ: スマホ --- */
+@media (max-width: 640px) {
+  .app {
+    grid-template-rows: 36px 1fr auto;
+  }
+
+  /* デスクトップの視差スライド(-30%)だと生成ページが画面右に残って見える。
+     スマホでは完全に画面外へ出して背景に残らないようにする。 */
+  .view-left {
+    transform: translateX(-100%);
+  }
+
+  .generation,
+  .page-header,
+  .page-body {
+    padding: 12px;
+  }
+
+  /* スマホでは固定2行グリッドをやめ、パラメータ→結果を自然に縦フローさせて
+     .generation 全体をスクロールできるようにする(下部の見切れ防止)。 */
+  .generation {
+    display: block;
+    overflow-y: auto;
+  }
+
+  .generation .result-card {
+    height: 60vh;
+    margin-top: 12px;
+  }
+
+  .row2,
+  .row3 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* バッチ枚数 (row3 の 3 番目) を 2 列レイアウトで 1 行に伸ばす */
+  .row3 > div:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .page-header h2 {
+    font-size: 18px;
+  }
+
+  .gallery {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  /* スマホではナビをハンバーガーに集約し、ステータスバーは状況表示のみ */
+  .menu-toggle {
+    display: block;
+  }
+
+  .statusbar-link {
+    display: none;
+  }
+
+  .statusbar {
+    padding: 8px 12px;
+  }
+
+  .status-text {
+    white-space: normal;
+  }
+
+  /* ライトボックスは縦積みで画像優先。画面端との余白を確保しつつ、
+     パネル内も広めの padding とゆとりある gap で窮屈さを解消する。 */
+  .lightbox {
+    padding: 16px;
+    align-items: stretch;
+  }
+
+  .lightbox-inner {
+    flex-direction: column;
+    overflow: auto;
+    gap: 16px;
+    padding: 16px;
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    margin: auto;
+  }
+
+  .lightbox-inner img {
+    max-width: 100%;
+    max-height: 45vh;
+    align-self: center;
+  }
+
+  .lightbox-meta {
+    width: auto;
+  }
+
+  /* パラメータは高さを抑えてスクロールさせ、ボタンを押し出さない */
+  .lightbox-meta pre {
+    max-height: 30vh;
+  }
+
+  /* タッチ操作しやすいよう主要ボタンをやや大きく */
+  button {
+    padding: 11px 14px;
+  }
+}
+
+/* --- ポインタが粗い端末 (タッチ) 向けの微調整 --- */
+@media (hover: none) {
+  .result-card img,
+  .gallery-item {
+    cursor: default;
+  }
+}

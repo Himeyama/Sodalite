@@ -7,9 +7,10 @@ corresponding scan simply yields nothing.
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
 
-STORE_PATH = Path("directories.json")
+from sodalite_backend.data_dir import data_path
+
+STORE_NAME = "directories.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,10 +20,11 @@ class ScanDirectories:
 
 
 def load_directories() -> ScanDirectories:
-    if not STORE_PATH.exists():
+    store_path = data_path(STORE_NAME)
+    if not store_path.exists():
         return ScanDirectories(model_dir=None, lora_dir=None)
 
-    with STORE_PATH.open(encoding="utf-8") as file:
+    with store_path.open(encoding="utf-8") as file:
         data = json.load(file)
 
     return ScanDirectories(
@@ -32,7 +34,7 @@ def load_directories() -> ScanDirectories:
 
 
 def save_directories(directories: ScanDirectories) -> ScanDirectories:
-    with STORE_PATH.open("w", encoding="utf-8") as file:
+    with data_path(STORE_NAME).open("w", encoding="utf-8") as file:
         json.dump(
             {"model_dir": directories.model_dir, "lora_dir": directories.lora_dir},
             file,

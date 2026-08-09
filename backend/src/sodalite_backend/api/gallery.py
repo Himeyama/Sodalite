@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 from sodalite_backend.imaging.gallery import list_gallery_images
-from sodalite_backend.imaging.storage import OUTPUT_DIR
+from sodalite_backend.imaging.storage import output_dir
 from sodalite_backend.schemas.generation import GalleryImageInfo
 
 router = APIRouter(prefix="/gallery", tags=["gallery"])
@@ -26,9 +26,9 @@ def delete_image(image_id: str) -> None:
 
 
 def _resolve_image_path(image_id: str) -> Path:
-    """Resolve `image_id` (a bare filename) to a path inside OUTPUT_DIR, rejecting
-    anything that would escape the directory (path traversal)."""
-    resolved_dir = OUTPUT_DIR.resolve()
+    """Resolve `image_id` (a bare filename) to a path inside the output directory,
+    rejecting anything that would escape the directory (path traversal)."""
+    resolved_dir = output_dir().resolve()
     path = (resolved_dir / image_id).resolve()
     if path.parent != resolved_dir or path.suffix.lower() != ".png":
         raise HTTPException(status_code=404, detail="Image not found.")

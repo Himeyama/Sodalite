@@ -7,16 +7,18 @@ plus any the user has activated — so the model list stays focused.
 """
 
 import json
-from pathlib import Path
 
-STORE_PATH = Path("known_hf_models.json")
+from sodalite_backend.data_dir import data_path
+
+STORE_NAME = "known_hf_models.json"
 
 
 def load_known_hf_model_ids() -> list[str]:
-    if not STORE_PATH.exists():
+    store_path = data_path(STORE_NAME)
+    if not store_path.exists():
         return []
 
-    with STORE_PATH.open(encoding="utf-8") as file:
+    with store_path.open(encoding="utf-8") as file:
         return json.load(file)
 
 
@@ -37,5 +39,5 @@ def remove_known_hf_model_id(model_id: str) -> list[str]:
 
 
 def _save(ids: list[str]) -> None:
-    with STORE_PATH.open("w", encoding="utf-8") as file:
+    with data_path(STORE_NAME).open("w", encoding="utf-8") as file:
         json.dump(ids, file, indent=2, ensure_ascii=False)

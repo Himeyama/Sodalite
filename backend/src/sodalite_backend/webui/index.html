@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sodalite</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="titlebar">
+      <button id="menu-toggle" class="menu-toggle" aria-label="メニュー" aria-expanded="false">&#9776;</button>
+      <span class="app-title">Sodalite</span>
+      <!-- スマホ幅でのみ表示するドロップダウンメニュー -->
+      <nav id="menu" class="menu" hidden>
+        <button class="menu-item" data-nav="generation">生成</button>
+        <button class="menu-item" data-nav="gallery">ギャラリー</button>
+        <button class="menu-item" data-nav="model">モデル</button>
+      </nav>
+    </header>
+
+    <!-- 3つのビューを重ね置きして横スライドで切り替える (WinUI3 の RootHost 相当) -->
+    <div class="viewport">
+      <!-- 生成ビュー -->
+      <section id="view-generation" class="view view-active">
+        <div class="generation">
+          <div class="params">
+            <label class="field-label">プロンプト</label>
+            <textarea id="prompt" rows="4"></textarea>
+
+            <label class="field-label">ネガティブプロンプト</label>
+            <textarea id="negative-prompt" rows="3"></textarea>
+
+            <div class="row2">
+              <div>
+                <label class="field-label">サンプラー</label>
+                <select id="sampler"></select>
+              </div>
+              <div>
+                <label class="field-label">シード</label>
+                <input type="text" id="seed" inputmode="numeric" placeholder="空欄でランダム" />
+              </div>
+            </div>
+
+            <label class="field-label">ステップ数 <span id="steps-out" class="value">20</span></label>
+            <input type="range" id="steps" min="1" max="150" step="1" value="20" />
+
+            <label class="field-label">CFG スケール <span id="cfg-out" class="value">7.0</span></label>
+            <input type="range" id="cfg" min="0" max="30" step="0.5" value="7" />
+
+            <div class="row3">
+              <div>
+                <label class="field-label">幅</label>
+                <input type="number" id="width" min="64" max="2048" step="8" value="1024" />
+              </div>
+              <div>
+                <label class="field-label">高さ</label>
+                <input type="number" id="height" min="64" max="2048" step="8" value="1024" />
+              </div>
+              <div>
+                <label class="field-label">バッチ枚数</label>
+                <input type="number" id="batch" min="1" max="120" step="1" value="1" />
+              </div>
+            </div>
+
+            <details class="lora-section">
+              <summary>LoRA</summary>
+              <div id="loras" class="loras"></div>
+            </details>
+
+            <button id="generate" class="accent" disabled>生成</button>
+            <button id="cancel" class="cancel" hidden>中止</button>
+          </div>
+
+          <div class="result-card">
+            <img id="result-image" alt="" hidden />
+            <p id="result-placeholder" class="placeholder">生成した画像がここに表示されます</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ギャラリービュー -->
+      <section id="view-gallery" class="view view-right">
+        <div class="page-header">
+          <button class="back" data-back>&#x2190;</button>
+          <h2>ギャラリー</h2>
+        </div>
+        <div class="page-body">
+          <p id="gallery-empty" class="placeholder center" hidden>まだ画像がありません</p>
+          <div id="gallery" class="gallery"></div>
+        </div>
+      </section>
+
+      <!-- モデル選択ビュー -->
+      <section id="view-model" class="view view-right">
+        <div class="page-header">
+          <button class="back" data-back>&#x2190;</button>
+          <h2>モデル</h2>
+        </div>
+        <div class="page-body">
+          <div class="dir-setting">
+            <label class="field-label">モデルフォルダ (サーバー上のパス)</label>
+            <div class="dir-row">
+              <input type="text" id="model-dir" placeholder="例: D:\models\checkpoints" />
+              <button id="save-model-dir">保存</button>
+            </div>
+          </div>
+
+          <label class="section-label">ベースモデル</label>
+          <div id="model-list" class="model-list"></div>
+
+          <div class="dir-setting">
+            <label class="field-label">LoRA フォルダ (サーバー上のパス)</label>
+            <div class="dir-row">
+              <input type="text" id="lora-dir" placeholder="例: D:\models\lora" />
+              <button id="save-lora-dir">保存</button>
+            </div>
+          </div>
+
+          <label class="section-label">LoRA</label>
+          <div id="lora-list" class="model-list"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 下部ステータスバー (WinUI3 の StatusBar 相当) -->
+    <footer class="statusbar">
+      <span id="status" class="status-text"></span>
+      <span class="spacer"></span>
+      <button id="nav-gallery" class="statusbar-link">ギャラリー</button>
+      <button id="nav-model" class="statusbar-link muted"></button>
+    </footer>
+  </div>
+
+  <!-- 拡大表示 + パラメータ再利用 -->
+  <div id="lightbox" class="lightbox" hidden>
+    <div class="lightbox-inner" role="dialog">
+      <img id="lightbox-img" alt="" />
+      <div class="lightbox-meta">
+        <pre id="lightbox-params"></pre>
+        <div class="lightbox-actions">
+          <button id="lb-reuse" class="accent">パラメータを再利用</button>
+          <button id="lb-delete" class="cancel">削除</button>
+          <button id="lb-close">閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

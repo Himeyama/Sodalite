@@ -6,25 +6,26 @@ from PIL import UnidentifiedImageError
 from pydantic import ValidationError
 
 from sodalite_backend.imaging.png_metadata import read_metadata
-from sodalite_backend.imaging.storage import OUTPUT_DIR
+from sodalite_backend.imaging.storage import output_dir as default_output_dir
 from sodalite_backend.schemas.generation import GalleryImageInfo, GalleryParameters
 
 IMAGE_EXTENSIONS = {".png"}
 
 
-def list_gallery_images(output_dir: Path = OUTPUT_DIR) -> list[GalleryImageInfo]:
+def list_gallery_images(output_dir: Path | None = None) -> list[GalleryImageInfo]:
     """List generated images under `output_dir`, newest first.
 
     Files that fail to open are skipped (most likely a truncated write from an
     interrupted generation). Files that open fine but carry no Sodalite
     metadata are still listed, with `parameters` left `None`.
     """
-    if not output_dir.is_dir():
+    directory = output_dir if output_dir is not None else default_output_dir()
+    if not directory.is_dir():
         return []
 
     files = [
         path
-        for path in output_dir.rglob("*")
+        for path in directory.rglob("*")
         if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
     ]
 
