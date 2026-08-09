@@ -4,7 +4,7 @@
 
 Stable Diffusion 画像生成デスクトップアプリ。一から独自実装したもの。
 
-<img width="600" alt="image" src="https://github.com/user-attachments/assets/e1151f70-408a-4a58-9549-4c01de492100" />
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/bb0b7d58-f920-4f02-a92f-6ea247ced829" />
 
 - **フロントエンド**: WinUI3 (.NET 9 / Windows App SDK)
 - **バックエンド**: Python 3.13+ / FastAPI / diffusers (uv管理)
