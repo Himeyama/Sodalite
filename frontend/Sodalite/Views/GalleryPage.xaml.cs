@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.Windows.ApplicationModel.Resources;
 using Sodalite.Models;
@@ -10,6 +11,8 @@ namespace Sodalite.Views;
 
 sealed partial class GalleryPage : Page
 {
+    const int SkeletonItemCount = 12;
+
     static readonly ResourceLoader ResourceLoader = new();
 
     readonly GalleryViewModel _viewModel;
@@ -37,11 +40,13 @@ sealed partial class GalleryPage : Page
     async Task ReloadAsync()
     {
         ErrorInfoBar.IsOpen = false;
-        LoadingProgressRing.IsActive = true;
+        EmptyTextBlock.Visibility = Visibility.Collapsed;
+        ImagesGridView.ItemsSource = Enumerable.Range(0, SkeletonItemCount)
+            .Select(_ => new GallerySkeletonItem())
+            .ToList();
 
         await _viewModel.LoadAsync(_apiClient, CancellationToken.None);
 
-        LoadingProgressRing.IsActive = false;
         if (_viewModel.ErrorMessage is string error)
         {
             ErrorInfoBar.Title = ResourceLoader.GetString("GalleryPage_LoadErrorTitle");
@@ -60,6 +65,16 @@ sealed partial class GalleryPage : Page
     }
 
     void BackButton_Click(object sender, RoutedEventArgs e) => BackRequested?.Invoke(this, EventArgs.Empty);
+
+    void SkeletonItemBorder_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Resources: var resources } &&
+            resources.TryGetValue("ShimmerStoryboard", out object storyboardObject) &&
+            storyboardObject is Storyboard storyboard)
+        {
+            storyboard.Begin();
+        }
+    }
 
     async void ImagesGridView_ItemClick(object sender, ItemClickEventArgs e)
     {

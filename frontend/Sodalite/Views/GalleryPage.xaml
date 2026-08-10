@@ -8,6 +8,67 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
+    <Page.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="SkeletonBaseBrush" Color="#FFD0D0D0" />
+                    <Color x:Key="SkeletonShimmerColor">#FFF5F5F5</Color>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="SkeletonBaseBrush" Color="#FF3A3A3A" />
+                    <Color x:Key="SkeletonShimmerColor">#FF5A5A5A</Color>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <DataTemplate x:Key="ImageItemTemplate" x:DataType="local:GalleryImageItem">
+                <Border Width="180" Height="180" CornerRadius="8"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <Image Source="{x:Bind Thumbnail}" Stretch="Uniform" Margin="4" />
+                </Border>
+            </DataTemplate>
+
+            <DataTemplate x:Key="SkeletonItemTemplate">
+                <Border Width="180" Height="180" CornerRadius="8"
+                        Background="{ThemeResource SkeletonBaseBrush}"
+                        Loaded="SkeletonItemBorder_Loaded">
+                    <Grid>
+                        <Grid.Clip>
+                            <RectangleGeometry Rect="0,0,180,180" />
+                        </Grid.Clip>
+                        <Rectangle Width="200">
+                            <Rectangle.RenderTransform>
+                                <TranslateTransform x:Name="ShimmerTransform" X="-200" />
+                            </Rectangle.RenderTransform>
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Offset="0.0" Color="Transparent" />
+                                    <GradientStop Offset="0.5" Color="{ThemeResource SkeletonShimmerColor}" />
+                                    <GradientStop Offset="1.0" Color="Transparent" />
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                    </Grid>
+                    <Border.Resources>
+                        <Storyboard x:Name="ShimmerStoryboard" RepeatBehavior="Forever">
+                            <DoubleAnimation Storyboard.TargetName="ShimmerTransform"
+                                              Storyboard.TargetProperty="X"
+                                              From="-200" To="380" Duration="0:0:1.2">
+                                <DoubleAnimation.EasingFunction>
+                                    <SineEase EasingMode="EaseInOut" />
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                        </Storyboard>
+                    </Border.Resources>
+                </Border>
+            </DataTemplate>
+
+            <local:GalleryItemTemplateSelector x:Key="GalleryItemTemplateSelector"
+                                                ImageTemplate="{StaticResource ImageItemTemplate}"
+                                                SkeletonTemplate="{StaticResource SkeletonItemTemplate}" />
+        </ResourceDictionary>
+    </Page.Resources>
+
     <Grid RowDefinitions="Auto,*" Padding="20" RowSpacing="16">
         <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
             <Button x:Name="BackButton" x:Uid="GalleryPage_BackButton"
@@ -24,25 +85,14 @@
                      Margin="0,0,0,12" />
 
             <Grid Grid.Row="1">
-                <ProgressRing x:Name="LoadingProgressRing" IsActive="False"
-                              HorizontalAlignment="Center" VerticalAlignment="Center" Width="32" Height="32" />
-
                 <TextBlock x:Name="EmptyTextBlock" x:Uid="GalleryPage_Empty"
                            HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.6"
                            Visibility="Collapsed" />
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <GridView x:Name="ImagesGridView" SelectionMode="None"
-                              IsItemClickEnabled="True" ItemClick="ImagesGridView_ItemClick">
-                        <GridView.ItemTemplate>
-                            <DataTemplate x:DataType="local:GalleryImageItem">
-                                <Border Width="180" Height="180" CornerRadius="8"
-                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                                    <Image Source="{x:Bind Thumbnail}" Stretch="Uniform" Margin="4" />
-                                </Border>
-                            </DataTemplate>
-                        </GridView.ItemTemplate>
-                    </GridView>
+                              IsItemClickEnabled="True" ItemClick="ImagesGridView_ItemClick"
+                              ItemTemplateSelector="{StaticResource GalleryItemTemplateSelector}" />
                 </ScrollViewer>
             </Grid>
         </Grid>
