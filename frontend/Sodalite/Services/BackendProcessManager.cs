@@ -28,6 +28,7 @@ sealed class BackendProcessManager : IAsyncDisposable
     /// </param>
     public async Task<int> StartAsync(
         string? modelId = null,
+        bool enableWebUi = false,
         IProgress<string>? onSetupProgress = null,
         CancellationToken ct = default)
     {
@@ -69,6 +70,13 @@ sealed class BackendProcessManager : IAsyncDisposable
         {
             startInfo.ArgumentList.Add("--model-id");
             startInfo.ArgumentList.Add(modelId);
+        }
+
+        // --webui を付けると config.py 側で host の既定が 0.0.0.0 になり、LAN 内の他端末から
+        // 無認証でアクセス可能になる(信頼できる LAN 前提)。ユーザーが明示的に有効化した場合のみ付与する。
+        if (enableWebUi)
+        {
+            startInfo.ArgumentList.Add("--webui");
         }
 
         _process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start backend process.");

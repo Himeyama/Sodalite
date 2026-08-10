@@ -56,7 +56,7 @@
 
         <Border Grid.Row="2" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 Padding="16,8">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
                 <TextBlock x:Name="StatusBarTextBlock" Grid.Column="0"
                            Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.7" />
 
@@ -67,7 +67,13 @@
                     <FontIcon x:Name="SkeletonScreenToggleIcon" Glyph="&#xE7B3;" FontSize="14" />
                 </Button>
 
-                <StackPanel x:Name="SystemStatsPanel" Grid.Column="2" Orientation="Horizontal"
+                <Button x:Name="WebUiToggleButton" Grid.Column="2"
+                        Style="{StaticResource StatusBarIconButtonStyle}"
+                        Margin="0,0,16,0" Click="WebUiToggleButton_Click">
+                    <FontIcon x:Name="WebUiToggleIcon" Glyph="&#xE774;" FontSize="14" />
+                </Button>
+
+                <StackPanel x:Name="SystemStatsPanel" Grid.Column="3" Orientation="Horizontal"
                             Spacing="12" Margin="0,0,16,0" Visibility="Collapsed">
                     <StackPanel Orientation="Horizontal" Spacing="4" Opacity="0.7"
                                 ToolTipService.ToolTip="CPU">
@@ -103,12 +109,12 @@
                     </StackPanel>
                 </StackPanel>
 
-                <HyperlinkButton x:Name="GalleryButton" Grid.Column="3"
+                <HyperlinkButton x:Name="GalleryButton" Grid.Column="4"
                                  Padding="0" Margin="0,0,16,0" IsEnabled="False" Click="GalleryButton_Click">
                     <TextBlock x:Uid="MainWindow_GalleryButtonLabel"
                                Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.7" />
                 </HyperlinkButton>
-                <HyperlinkButton x:Name="ModelSelectionButton" Grid.Column="4"
+                <HyperlinkButton x:Name="ModelSelectionButton" Grid.Column="5"
                                  Padding="0" IsEnabled="False" Click="ModelSelectionButton_Click">
                     <TextBlock x:Name="StatusBarDeviceInfoTextBlock"
                                Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.5" />

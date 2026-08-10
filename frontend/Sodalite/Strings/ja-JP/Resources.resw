@@ -68,6 +68,15 @@
   <data name="MainWindow_SkeletonScreenToggleButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>生成中のスケルトン表示のオン・オフを切り替えます（オフの場合は直近の生成結果を表示し続けます）。</value>
   </data>
+  <data name="MainWindow_WebUiToggleButton_Off" xml:space="preserve">
+    <value>webui（LANアクセス対応のブラウザUI）は無効です。クリックして有効化し、アプリを再起動すると同じLAN内の他端末からアクセスできるようになります（無認証のため信頼できるLANでのみ使用してください）。</value>
+  </data>
+  <data name="MainWindow_WebUiToggleButton_On" xml:space="preserve">
+    <value>webui（LANアクセス対応のブラウザUI）は有効です。クリックして無効化できます（変更はアプリの再起動後に反映されます）。</value>
+  </data>
+  <data name="MainWindow_WebUiRestartRequired" xml:space="preserve">
+    <value>webui の設定を変更しました。反映するにはアプリを再起動してください。</value>
+  </data>
   <data name="MainWindow_BackendFailedToStart" xml:space="preserve">
     <value>バックエンドの起動に失敗しました: {0}</value>
   </data>

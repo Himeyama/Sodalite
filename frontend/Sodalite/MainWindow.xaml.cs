@@ -31,6 +31,8 @@ public sealed partial class MainWindow : Window
 
         Closed += MainWindow_Closed;
 
+        UpdateWebUiToggleUi();
+
         // GenerationPage は Frame.Navigate ではなく先に生成してイベント購読する。Navigate 後の
         // 購読では遷移直後に発火する初期状態イベントを取りこぼすため。インスタンスは保持し、
         // モデル選択ページから戻る際はこのインスタンスへ復帰させて状態を維持する。
@@ -160,7 +162,7 @@ public sealed partial class MainWindow : Window
         try
         {
             int port = await _backendProcessManager
-                .StartAsync(AppSettings.LastModelId, onSetupProgress: setupProgress)
+                .StartAsync(AppSettings.LastModelId, AppSettings.WebUiEnabled, onSetupProgress: setupProgress)
                 .ConfigureAwait(false);
             _apiClient = new BackendApiClient(port);
 
@@ -265,6 +267,24 @@ public sealed partial class MainWindow : Window
         bool isEnabled = _generationPage.ToggleSkeletonScreen();
         SkeletonScreenToggleIcon.Glyph = isEnabled ? "" : "";
         SkeletonScreenToggleButton.Opacity = isEnabled ? 0.7 : 1.0;
+    }
+
+    // webui の有効・無効はバックエンドプロセス起動時の --webui フラグでしか切り替えられないため、
+    // ここでは次回起動用の設定を保存するだけで、既に起動中のバックエンドには反映しない。
+    void WebUiToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        AppSettings.WebUiEnabled = !AppSettings.WebUiEnabled;
+        UpdateWebUiToggleUi();
+        StatusBarTextBlock.Text = ResourceLoader.GetString("MainWindow_WebUiRestartRequired");
+    }
+
+    void UpdateWebUiToggleUi()
+    {
+        bool isEnabled = AppSettings.WebUiEnabled;
+        WebUiToggleButton.Opacity = isEnabled ? 0.7 : 1.0;
+        ToolTipService.SetToolTip(
+            WebUiToggleButton,
+            ResourceLoader.GetString(isEnabled ? "MainWindow_WebUiToggleButton_On" : "MainWindow_WebUiToggleButton_Off"));
     }
 
     async void MainWindow_Closed(object sender, WindowEventArgs args)

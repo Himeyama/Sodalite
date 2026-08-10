@@ -68,6 +68,15 @@
   <data name="MainWindow_SkeletonScreenToggleButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Toggle the skeleton screen shown while generating (when off, the latest result stays visible instead).</value>
   </data>
+  <data name="MainWindow_WebUiToggleButton_Off" xml:space="preserve">
+    <value>webui (LAN-accessible browser UI) is disabled. Click to enable it; after restarting the app, other devices on the same LAN will be able to access it (unauthenticated, so only use this on a trusted LAN).</value>
+  </data>
+  <data name="MainWindow_WebUiToggleButton_On" xml:space="preserve">
+    <value>webui (LAN-accessible browser UI) is enabled. Click to disable it (changes take effect after restarting the app).</value>
+  </data>
+  <data name="MainWindow_WebUiRestartRequired" xml:space="preserve">
+    <value>webui setting changed. Restart the app for it to take effect.</value>
+  </data>
   <data name="MainWindow_BackendFailedToStart" xml:space="preserve">
     <value>Backend failed to start: {0}</value>
   </data>
