@@ -13,7 +13,7 @@ IMAGE_EXTENSIONS = {".png"}
 
 
 def list_gallery_images(output_dir: Path | None = None) -> list[GalleryImageInfo]:
-    """List generated images under `output_dir`, newest first.
+    """List generated images directly under `output_dir` (non-recursive), newest first.
 
     Files that fail to open are skipped (most likely a truncated write from an
     interrupted generation). Files that open fine but carry no Sodalite
@@ -25,7 +25,7 @@ def list_gallery_images(output_dir: Path | None = None) -> list[GalleryImageInfo
 
     files = [
         path
-        for path in directory.rglob("*")
+        for path in directory.iterdir()
         if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
     ]
 
