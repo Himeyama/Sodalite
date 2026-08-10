@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 
+from sodalite_backend.inference.active_model_store import save_active_model_id
 from sodalite_backend.inference.directories_store import (
     ScanDirectories,
     load_directories,
@@ -56,6 +57,9 @@ def set_active_model(request: Request, body: SetActiveModelRequest) -> ModelInfo
     # single-file checkpoints are surfaced by scanning the configured model directory.
     if not Path(body.model_id).is_file():
         add_known_hf_model_id(body.model_id)
+
+    # Persist so the next backend start resumes with this model instead of the default.
+    save_active_model_id(pipeline_manager.model_id)
 
     return ModelInfo(model_id=pipeline_manager.model_id, is_active=True, size_on_disk_bytes=0)
 
