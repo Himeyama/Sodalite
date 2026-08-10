@@ -28,47 +28,51 @@
             <label class="field-label">プロンプト</label>
             <textarea id="prompt" rows="4"></textarea>
 
-            <label class="field-label">ネガティブプロンプト</label>
-            <textarea id="negative-prompt" rows="3"></textarea>
+            <details id="advanced-section" class="lora-section">
+              <summary>詳細</summary>
 
-            <div class="row2">
-              <div>
-                <label class="field-label">サンプラー</label>
-                <select id="sampler"></select>
-              </div>
-              <div>
-                <label class="field-label">シード</label>
-                <input type="text" id="seed" inputmode="numeric" placeholder="空欄でランダム" />
-              </div>
-            </div>
+              <label class="field-label">ネガティブプロンプト</label>
+              <textarea id="negative-prompt" rows="3"></textarea>
 
-            <label class="field-label">ステップ数 <span id="steps-out" class="value">20</span></label>
-            <input type="range" id="steps" min="1" max="150" step="1" value="20" />
-
-            <label class="field-label">CFG スケール <span id="cfg-out" class="value">7.0</span></label>
-            <input type="range" id="cfg" min="0" max="30" step="0.5" value="7" />
-
-            <div class="row3">
-              <div>
-                <label class="field-label">幅</label>
-                <input type="number" id="width" min="64" max="2048" step="8" value="1024" />
+              <div class="row2">
+                <div>
+                  <label class="field-label">サンプラー</label>
+                  <select id="sampler"></select>
+                </div>
+                <div>
+                  <label class="field-label">シード</label>
+                  <input type="text" id="seed" inputmode="numeric" placeholder="空欄でランダム" />
+                </div>
               </div>
-              <div>
-                <label class="field-label">高さ</label>
-                <input type="number" id="height" min="64" max="2048" step="8" value="1024" />
-              </div>
-              <div>
-                <label class="field-label">バッチ枚数</label>
-                <input type="number" id="batch" min="1" max="120" step="1" value="1" />
-              </div>
-            </div>
 
-            <details class="lora-section">
-              <summary>LoRA</summary>
-              <div id="loras" class="loras"></div>
+              <label class="field-label">ステップ数 <span id="steps-out" class="value">20</span></label>
+              <input type="range" id="steps" min="1" max="150" step="1" value="20" />
+
+              <label class="field-label">CFG スケール <span id="cfg-out" class="value">7.0</span></label>
+              <input type="range" id="cfg" min="0" max="30" step="0.5" value="7" />
+
+              <div class="row3">
+                <div>
+                  <label class="field-label">幅</label>
+                  <input type="number" id="width" min="64" max="2048" step="8" value="1024" />
+                </div>
+                <div>
+                  <label class="field-label">高さ</label>
+                  <input type="number" id="height" min="64" max="2048" step="8" value="1024" />
+                </div>
+                <div>
+                  <label class="field-label">バッチ枚数</label>
+                  <input type="number" id="batch" min="1" max="120" step="1" value="1" />
+                </div>
+              </div>
+
+              <details class="lora-section">
+                <summary>LoRA</summary>
+                <div id="loras" class="loras"></div>
+              </details>
             </details>
 
-            <button id="generate" class="accent" disabled>生成</button>
+            <button id="generate" class="accent" disabled><span id="generate-spinner" class="status-spinner" hidden></span><span id="generate-label">生成</span></button>
             <button id="cancel" class="cancel" hidden>中止</button>
           </div>
 
@@ -82,8 +86,14 @@
       <!-- ギャラリービュー -->
       <section id="view-gallery" class="view view-right">
         <div class="page-header">
-          <button class="back" data-back>&#x2190;</button>
+          <button class="back" data-back aria-label="戻る">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
           <h2>ギャラリー</h2>
+          <span class="spacer"></span>
+          <button id="gallery-refresh" class="refresh" aria-label="更新"><span class="refresh-icon">&#x21bb;</span></button>
         </div>
         <div class="page-body">
           <p id="gallery-empty" class="placeholder center" hidden>まだ画像がありません</p>
@@ -94,7 +104,11 @@
       <!-- モデル選択ビュー -->
       <section id="view-model" class="view view-right">
         <div class="page-header">
-          <button class="back" data-back>&#x2190;</button>
+          <button class="back" data-back aria-label="戻る">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
           <h2>モデル</h2>
         </div>
         <div class="page-body">
@@ -107,7 +121,12 @@
           </div>
 
           <label class="section-label">ベースモデル</label>
-          <div id="model-list" class="model-list"></div>
+          <button id="model-select-trigger" class="model-select-trigger" type="button">
+            <span id="model-select-current" class="model-select-current">未選択</span>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 6 15 12 9 18"></polyline>
+            </svg>
+          </button>
 
           <div class="dir-setting">
             <label class="field-label">LoRA フォルダ (サーバー上のパス)</label>
@@ -125,11 +144,27 @@
 
     <!-- 下部ステータスバー (WinUI3 の StatusBar 相当) -->
     <footer class="statusbar">
-      <span id="status" class="status-text"></span>
+      <span id="status" class="status-text"><span id="status-spinner" class="status-spinner" hidden></span><span id="status-text-content"></span></span>
       <span class="spacer"></span>
       <button id="nav-gallery" class="statusbar-link">ギャラリー</button>
       <button id="nav-model" class="statusbar-link muted"></button>
     </footer>
+  </div>
+
+  <!-- ベースモデル選択モーダル -->
+  <div id="model-select-modal" class="modal" hidden>
+    <div class="modal-inner" role="dialog" aria-label="ベースモデルを選択">
+      <div class="modal-header">
+        <h3>ベースモデルを選択</h3>
+        <button id="model-select-close" class="modal-close" aria-label="閉じる">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div id="model-select-list" class="model-list modal-body"></div>
+    </div>
   </div>
 
   <!-- 拡大表示 + パラメータ再利用 -->

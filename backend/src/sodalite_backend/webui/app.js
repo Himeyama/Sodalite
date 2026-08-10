@@ -20,9 +20,14 @@ const els = {
   height: $("height"),
   batch: $("batch"),
   loras: $("loras"),
+  advancedSection: $("advanced-section"),
   generate: $("generate"),
+  generateSpinner: $("generate-spinner"),
+  generateLabel: $("generate-label"),
   cancel: $("cancel"),
   status: $("status"),
+  statusSpinner: $("status-spinner"),
+  statusTextContent: $("status-text-content"),
   resultImage: $("result-image"),
   resultPlaceholder: $("result-placeholder"),
   navGallery: $("nav-gallery"),
@@ -34,7 +39,12 @@ const els = {
   viewModel: $("view-model"),
   gallery: $("gallery"),
   galleryEmpty: $("gallery-empty"),
-  modelList: $("model-list"),
+  galleryRefresh: $("gallery-refresh"),
+  modelSelectTrigger: $("model-select-trigger"),
+  modelSelectCurrent: $("model-select-current"),
+  modelSelectModal: $("model-select-modal"),
+  modelSelectList: $("model-select-list"),
+  modelSelectClose: $("model-select-close"),
   loraList: $("lora-list"),
   modelDir: $("model-dir"),
   loraDir: $("lora-dir"),
@@ -61,7 +71,43 @@ async function getJson(path) {
 }
 
 function setStatus(text) {
-  els.status.textContent = text;
+  els.statusTextContent.textContent = text;
+}
+
+// 点字パターンのフレームを順に表示するスピナー (Braille spinner)。
+// ステータスバーと生成ボタンなど、複数要素を同じタイマーで同期して回す。
+const BRAILLE_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const BRAILLE_SPINNER_INTERVAL_MS = 80;
+const spinnerElements = [];
+let spinnerTimer = null;
+
+function startStatusSpinner(...elements) {
+  spinnerElements.push(...elements);
+  for (const el of elements) {
+    el.hidden = false;
+    el.textContent = BRAILLE_SPINNER_FRAMES[0];
+  }
+  if (spinnerTimer !== null) {
+    return;
+  }
+  let frame = 0;
+  spinnerTimer = setInterval(() => {
+    frame = (frame + 1) % BRAILLE_SPINNER_FRAMES.length;
+    for (const el of spinnerElements) {
+      el.textContent = BRAILLE_SPINNER_FRAMES[frame];
+    }
+  }, BRAILLE_SPINNER_INTERVAL_MS);
+}
+
+function stopStatusSpinner() {
+  if (spinnerTimer !== null) {
+    clearInterval(spinnerTimer);
+    spinnerTimer = null;
+  }
+  for (const el of spinnerElements) {
+    el.hidden = true;
+  }
+  spinnerElements.length = 0;
 }
 
 // --- ビュー切替 (WinUI3 の横スライド遷移を踏襲) ---
@@ -84,14 +130,34 @@ function showView(view) {
 }
 
 // ステータスバーのリンクとスマホのハンバーガーメニューの両方から使う共通遷移。
-async function navigateTo(view) {
+// URL ハッシュに現在のビューを反映し、ブラウザの更新/戻る/進むでも同じビューに戻れるようにする。
+async function navigateTo(view, { replace = false } = {}) {
   closeMenu();
   showView(view);
+  setViewHash(view, replace);
   if (view === "gallery") {
     await loadGallery();
   } else if (view === "model") {
     await Promise.all([loadDirectories(), loadModels(), loadLoras()]);
   }
+}
+
+function setViewHash(view, replace) {
+  const hash = view === "generation" ? "" : `#${view}`;
+  if ((location.hash || "") === hash) {
+    return;
+  }
+  const url = location.pathname + location.search + hash;
+  if (replace) {
+    history.replaceState(null, "", url);
+  } else {
+    history.pushState(null, "", url);
+  }
+}
+
+function viewFromHash() {
+  const hash = location.hash.replace(/^#/, "");
+  return hash === "gallery" || hash === "model" ? hash : "generation";
 }
 
 function toggleMenu() {
@@ -122,6 +188,14 @@ function modelDisplayName(modelId) {
     return "?";
   }
   return modelId.split(/[\\/]/).pop();
+}
+
+// ベースモデル選択 UI 専用: ファイル名から拡張子を除いた表示名。
+// (HF repo id には拡張子がないため影響なし)
+function modelFileDisplayName(modelId) {
+  const base = modelDisplayName(modelId);
+  const dot = base.lastIndexOf(".");
+  return dot > 0 ? base.slice(0, dot) : base;
 }
 
 async function loadSamplers() {
@@ -260,6 +334,68 @@ function buildRequest() {
   };
 }
 
+// --- プロンプト等の永続化 (ブラウザ更新をまたいで保持) ---
+
+const PROMPT_STORAGE_KEY = "sodalite.promptState";
+
+function savePromptState() {
+  const state = {
+    prompt: els.prompt.value,
+    negative_prompt: els.negativePrompt.value,
+    sampler: els.sampler.value,
+    seed: els.seed.value,
+    steps: els.steps.value,
+    cfg: els.cfg.value,
+    width: els.width.value,
+    height: els.height.value,
+    batch: els.batch.value,
+  };
+  try {
+    localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ストレージが使えない環境 (プライベートモード等) では保存をあきらめる。
+  }
+}
+
+function loadPromptState() {
+  try {
+    const raw = localStorage.getItem(PROMPT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function restorePromptState() {
+  const state = loadPromptState();
+  if (!state) {
+    return;
+  }
+  els.prompt.value = state.prompt ?? "";
+  els.negativePrompt.value = state.negative_prompt ?? "";
+  if (state.sampler) {
+    els.sampler.value = state.sampler;
+  }
+  els.seed.value = state.seed ?? "";
+  if (state.steps != null) {
+    els.steps.value = state.steps;
+    els.stepsOut.textContent = state.steps;
+  }
+  if (state.cfg != null) {
+    els.cfg.value = state.cfg;
+    els.cfgOut.textContent = Number(state.cfg).toFixed(1);
+  }
+  if (state.width != null) {
+    els.width.value = state.width;
+  }
+  if (state.height != null) {
+    els.height.value = state.height;
+  }
+  if (state.batch != null) {
+    els.batch.value = state.batch;
+  }
+}
+
 function showResultImage(url) {
   els.resultImage.src = url;
   els.resultImage.hidden = false;
@@ -276,6 +412,8 @@ async function onGenerate() {
   }
 
   setGenerating(true);
+  els.generateLabel.textContent = "生成中…";
+  startStatusSpinner(els.statusSpinner, els.generateSpinner);
   setStatus("生成を開始しています…");
 
   try {
@@ -293,6 +431,8 @@ async function onGenerate() {
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error));
   } finally {
+    stopStatusSpinner();
+    els.generateLabel.textContent = "生成";
     setGenerating(false);
     runningJobId = null;
   }
@@ -333,16 +473,25 @@ async function pollUntilDone(jobId) {
   }
 }
 
+function stepPercentText(job) {
+  if (!job.total_steps) {
+    return "";
+  }
+  const percent = Math.round((Math.min(job.current_step, job.total_steps) / job.total_steps) * 100);
+  return ` (${percent}%)`;
+}
+
 function updateProgressStatus(job, imageStart, batchStart) {
   const imageSeconds = (performance.now() - imageStart) / 1000;
+  const percentText = stepPercentText(job);
   if (job.total_images <= 1) {
-    setStatus(`生成中… ${imageSeconds.toFixed(1)} 秒`);
+    setStatus(`生成中…${percentText} ${imageSeconds.toFixed(1)} 秒`);
     return;
   }
   const current = Math.min(job.images_completed + 1, job.total_images);
   const totalSeconds = (performance.now() - batchStart) / 1000;
   setStatus(
-    `生成中… ${current}/${job.total_images} 枚目 ` +
+    `生成中…${percentText} ${current}/${job.total_images} 枚目 ` +
       `(この画像 ${imageSeconds.toFixed(1)} 秒 / 累計 ${totalSeconds.toFixed(1)} 秒)`,
   );
 }
@@ -375,10 +524,12 @@ async function loadModels() {
   } catch {
     return;
   }
-  els.modelList.innerHTML = "";
+  els.modelSelectList.innerHTML = "";
   for (const model of models) {
-    els.modelList.appendChild(buildModelItem(model));
+    els.modelSelectList.appendChild(buildModelItem(model));
   }
+  const active = models.find((model) => model.is_active);
+  els.modelSelectCurrent.textContent = active ? modelFileDisplayName(active.model_id) : "未選択";
 }
 
 function buildModelItem(model) {
@@ -391,7 +542,7 @@ function buildModelItem(model) {
 
   const name = document.createElement("span");
   name.className = "model-name";
-  name.textContent = model.model_id;
+  name.textContent = modelFileDisplayName(model.model_id);
   name.title = model.model_id;
 
   const size = document.createElement("span");
@@ -409,6 +560,7 @@ function formatBytes(bytes) {
 }
 
 async function switchModel(modelId) {
+  closeModelSelectModal();
   if (modelId === activeModelId) {
     return;
   }
@@ -429,6 +581,14 @@ async function switchModel(modelId) {
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error));
   }
+}
+
+function openModelSelectModal() {
+  els.modelSelectModal.hidden = false;
+}
+
+function closeModelSelectModal() {
+  els.modelSelectModal.hidden = true;
 }
 
 // --- スキャンディレクトリ設定 (WinUI のフォルダ選択に相当) ---
@@ -477,17 +637,42 @@ async function onSaveDirectories() {
 
 // --- ギャラリー ---
 
+const GALLERY_SKELETON_COUNT = 12;
+
+function showGallerySkeleton() {
+  els.galleryEmpty.hidden = true;
+  els.gallery.innerHTML = "";
+  for (let i = 0; i < GALLERY_SKELETON_COUNT; i++) {
+    const item = document.createElement("div");
+    item.className = "gallery-item skeleton";
+    els.gallery.appendChild(item);
+  }
+}
+
 async function loadGallery() {
+  showGallerySkeleton();
   let images;
   try {
     images = await getJson("/gallery/images");
   } catch {
+    els.gallery.innerHTML = "";
     return;
   }
   els.gallery.innerHTML = "";
   els.galleryEmpty.hidden = images.length > 0;
   for (const image of images) {
     els.gallery.appendChild(buildGalleryItem(image));
+  }
+}
+
+async function onGalleryRefresh() {
+  els.galleryRefresh.disabled = true;
+  els.galleryRefresh.classList.add("spinning");
+  try {
+    await loadGallery();
+  } finally {
+    els.galleryRefresh.classList.remove("spinning");
+    els.galleryRefresh.disabled = false;
   }
 }
 
@@ -569,9 +754,12 @@ function reuseParams() {
     els.sampler.value = params.sampler;
   }
   els.seed.value = params.seed != null ? String(params.seed) : "";
+  els.advancedSection.open = true;
+  savePromptState();
 
   closeLightbox();
   showView("generation");
+  setViewHash("generation", false);
   setStatus("パラメータを再利用しました");
 }
 
@@ -605,7 +793,24 @@ function wireEvents() {
   els.generate.addEventListener("click", onGenerate);
   els.cancel.addEventListener("click", onCancel);
 
+  // プロンプト等はブラウザ更新後も残るよう、変更のたびに保存する。
+  for (const el of [
+    els.prompt,
+    els.negativePrompt,
+    els.sampler,
+    els.seed,
+    els.steps,
+    els.cfg,
+    els.width,
+    els.height,
+    els.batch,
+  ]) {
+    el.addEventListener("input", savePromptState);
+    el.addEventListener("change", savePromptState);
+  }
+
   els.navGallery.addEventListener("click", () => navigateTo("gallery"));
+  els.galleryRefresh.addEventListener("click", onGalleryRefresh);
   els.navModel.addEventListener("click", () => navigateTo("model"));
   els.saveModelDir.addEventListener("click", onSaveDirectories);
   els.saveLoraDir.addEventListener("click", onSaveDirectories);
@@ -642,13 +847,24 @@ function wireEvents() {
       closeLightbox();
     }
   });
+
+  els.modelSelectTrigger.addEventListener("click", openModelSelectModal);
+  els.modelSelectClose.addEventListener("click", closeModelSelectModal);
+  els.modelSelectModal.addEventListener("click", (event) => {
+    if (event.target === els.modelSelectModal) {
+      closeModelSelectModal();
+    }
+  });
 }
 
 async function init() {
   wireEvents();
+  window.addEventListener("popstate", () => navigateTo(viewFromHash(), { replace: true }));
   await loadHealth();
   await Promise.allSettled([loadSamplers(), loadLoras()]);
+  restorePromptState();
   els.generate.disabled = false;
+  await navigateTo(viewFromHash(), { replace: true });
 }
 
 init();

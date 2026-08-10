@@ -30,6 +30,7 @@ class SupportsGenerate(Protocol):
         batch_size: int,
         loras: list[LoraSpec] | None,
         should_stop,
+        on_step,
     ): ...
 
 
@@ -91,6 +92,9 @@ class JobManager:
     ) -> None:
         self._update_job(job_id, status="running")
 
+        def report_step(step_index: int, total_steps: int) -> None:
+            self._update_job(job_id, current_step=step_index, total_steps=total_steps)
+
         try:
             images = self._pipeline_manager.generate(
                 prompt=request.prompt,
@@ -104,6 +108,7 @@ class JobManager:
                 batch_size=request.batch_size,
                 loras=request.loras,
                 should_stop=cancel_event.is_set,
+                on_step=report_step,
             )
 
             metadata = request.model_dump()
@@ -118,6 +123,7 @@ class JobManager:
                     status="running",
                     progress=images_completed / request.batch_size,
                     current_step=request.steps,
+                    total_steps=request.steps,
                     images_completed=images_completed,
                     image_url=f"/api/v1/images/{image_path.name}",
                     image_path=str(image_path.resolve()),

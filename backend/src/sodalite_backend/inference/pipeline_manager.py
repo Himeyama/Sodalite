@@ -164,6 +164,7 @@ class PipelineManager:
         batch_size: int = 1,
         loras: list[LoraSpec] | None = None,
         should_stop: Callable[[], bool] | None = None,
+        on_step: Callable[[int, int], None] | None = None,
     ) -> Iterator[Image.Image]:
         """Yield `batch_size` images one at a time, each as soon as it's ready.
 
@@ -173,6 +174,8 @@ class PipelineManager:
         the caller react to (save, display) each image as it finishes instead of
         waiting for the whole batch. `should_stop` is polled between images so a
         long batch can be cancelled without waiting for it to run to completion.
+        `on_step`, if given, is called after each denoising step with
+        `(step_index, total_steps)` so the caller can surface within-image progress.
         """
         self.set_sampler(sampler)
 
@@ -187,6 +190,16 @@ class PipelineManager:
                 if seed is not None:
                     generator = torch.Generator(device=self.device).manual_seed(seed + index)
 
+                def report_step(
+                    _pipeline: DiffusionPipeline,
+                    step_index: int,
+                    _timestep: int,
+                    callback_kwargs: dict[str, object],
+                ) -> dict[str, object]:
+                    if on_step is not None:
+                        on_step(step_index + 1, steps)
+                    return callback_kwargs
+
                 result = self._pipeline(
                     prompt=prompt,
                     negative_prompt=negative_prompt or None,
@@ -195,6 +208,7 @@ class PipelineManager:
                     width=width,
                     height=height,
                     generator=generator,
+                    callback_on_step_end=report_step if on_step is not None else None,
                 )
                 yield result.images[0]
         finally:
