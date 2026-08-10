@@ -174,6 +174,8 @@ public sealed partial class MainWindow : Window
 
                 ModelSelectionButton.IsEnabled = true;
                 GalleryButton.IsEnabled = true;
+
+                UpdateWebUiToggleUi();
             });
         }
         catch (UvNotFoundException)
@@ -282,9 +284,12 @@ public sealed partial class MainWindow : Window
     {
         bool isEnabled = AppSettings.WebUiEnabled;
         WebUiToggleButton.Opacity = isEnabled ? 0.7 : 1.0;
-        ToolTipService.SetToolTip(
-            WebUiToggleButton,
-            ResourceLoader.GetString(isEnabled ? "MainWindow_WebUiToggleButton_On" : "MainWindow_WebUiToggleButton_Off"));
+
+        // 起動済みの webui は URL を、それ以外はオン・オフの説明を表示する。
+        string tooltip = isEnabled && _backendProcessManager.WebUiUrl is string webUiUrl
+            ? string.Format(ResourceLoader.GetString("MainWindow_WebUiToggleButton_Url"), webUiUrl)
+            : ResourceLoader.GetString(isEnabled ? "MainWindow_WebUiToggleButton_On" : "MainWindow_WebUiToggleButton_Off");
+        ToolTipService.SetToolTip(WebUiToggleButton, tooltip);
     }
 
     async void MainWindow_Closed(object sender, WindowEventArgs args)

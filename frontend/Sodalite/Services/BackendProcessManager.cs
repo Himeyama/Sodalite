@@ -6,6 +6,10 @@ namespace Sodalite.Services;
 
 sealed class BackendProcessManager : IAsyncDisposable
 {
+    // webui (LANアクセス対応) 有効時に使う固定ポート。LAN内の他端末からアクセスする際に
+    // 毎回変わるのは不便なため、動的ポートではなく固定値にする。
+    const int WebUiPort = 8188;
+
     static readonly TimeSpan HealthCheckInterval = TimeSpan.FromMilliseconds(500);
     static readonly TimeSpan HealthCheckTimeout = TimeSpan.FromSeconds(120);
 
@@ -15,6 +19,12 @@ sealed class BackendProcessManager : IAsyncDisposable
     Process? _process;
 
     public int Port { get; private set; }
+
+    /// <summary>
+    /// webui (LANアクセス対応) が有効な場合の接続先 URL。LAN内の他端末からアクセスする際に案内する用途。
+    /// IPv4 の LAN アドレスが見つからない場合はループバックにフォールバックする。
+    /// </summary>
+    public string? WebUiUrl { get; private set; }
 
     public BackendProcessManager(string backendProjectPath)
     {
@@ -36,7 +46,8 @@ sealed class BackendProcessManager : IAsyncDisposable
         // ここで uv sync を実行する(成功時のみマーカーが書かれ、失敗時は次回起動で再試行される)。
         await _environmentSetup.EnsureAsync(onSetupProgress, ct).ConfigureAwait(false);
 
-        Port = FindFreePort();
+        Port = enableWebUi ? WebUiPort : FindFreePort();
+        WebUiUrl = enableWebUi ? $"http://{FindLanIPAddress()}:{Port}" : null;
 
         ProcessStartInfo startInfo = new()
         {
@@ -150,6 +161,21 @@ sealed class BackendProcessManager : IAsyncDisposable
         int port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         return port;
+    }
+
+    // LAN内の他端末からアクセスするための案内用に、このマシンのLAN側 IPv4 アドレスを推定する。
+    // 複数 NIC がある場合は最初に見つかったものを使う簡易実装。見つからなければループバックを返す。
+    static string FindLanIPAddress()
+    {
+        foreach (IPAddress address in Dns.GetHostAddresses(Dns.GetHostName()))
+        {
+            if (address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(address))
+            {
+                return address.ToString();
+            }
+        }
+
+        return IPAddress.Loopback.ToString();
     }
 
     public ValueTask DisposeAsync()

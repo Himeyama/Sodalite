@@ -74,6 +74,9 @@
   <data name="MainWindow_WebUiToggleButton_On" xml:space="preserve">
     <value>webui（LANアクセス対応のブラウザUI）は有効です。クリックして無効化できます（変更はアプリの再起動後に反映されます）。</value>
   </data>
+  <data name="MainWindow_WebUiToggleButton_Url" xml:space="preserve">
+    <value>webui: {0}（同じLAN内の他端末からアクセスできます。クリックして無効化できます）</value>
+  </data>
   <data name="MainWindow_WebUiRestartRequired" xml:space="preserve">
     <value>webui の設定を変更しました。反映するにはアプリを再起動してください。</value>
   </data>

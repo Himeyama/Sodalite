@@ -20,7 +20,7 @@ static class AppSettings
         set => Save(Load() with { LastModelId = value });
     }
 
-    /// <summary>次回バックエンド起動時に webui (LANアクセス可能なブラウザUI) を有効にするか。</summary>
+    /// <summary>次回バックエンド起動時に webui (LANアクセス可能なブラウザUI) を有効にするか。既定は有効。</summary>
     public static bool WebUiEnabled
     {
         get => Load().WebUiEnabled;
@@ -32,11 +32,11 @@ static class AppSettings
         try
         {
             string json = File.ReadAllText(SettingsFilePath);
-            return JsonSerializer.Deserialize<Settings>(json) ?? new Settings(null, false);
+            return JsonSerializer.Deserialize<Settings>(json) ?? new Settings(null, true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            return new Settings(null, false);
+            return new Settings(null, true);
         }
     }
 
