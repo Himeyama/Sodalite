@@ -61,21 +61,35 @@ sealed class GalleryViewModel : INotifyPropertyChanged
         }
     }
 
-    public async Task DeleteAsync(GalleryImageInfo image, CancellationToken ct)
+    /// <summary>削除に成功したら null、失敗したらエラーメッセージを返す。</summary>
+    public async Task<string?> DeleteAsync(GalleryImageInfo image, CancellationToken ct)
     {
         if (_apiClient is not BackendApiClient apiClient)
         {
-            return;
+            return null;
         }
+
+        int originalIndex = Images.IndexOf(image);
+        if (originalIndex < 0)
+        {
+            return null;
+        }
+
+        Images.RemoveAt(originalIndex);
 
         try
         {
             await apiClient.DeleteGalleryImageAsync(image.ImageId, ct).ConfigureAwait(false);
-            _dispatcherQueue.TryEnqueue(() => Images.Remove(image));
+            return null;
         }
         catch (Exception ex)
         {
-            _dispatcherQueue.TryEnqueue(() => ErrorMessage = ex.Message);
+            _dispatcherQueue.TryEnqueue(() =>
+            {
+                int insertIndex = Math.Min(originalIndex, Images.Count);
+                Images.Insert(insertIndex, image);
+            });
+            return ex.Message;
         }
     }
 

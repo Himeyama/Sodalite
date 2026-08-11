@@ -679,6 +679,7 @@ async function onGalleryRefresh() {
 function buildGalleryItem(image) {
   const item = document.createElement("div");
   item.className = "gallery-item";
+  item.dataset.imageId = image.image_id ?? "";
 
   const img = document.createElement("img");
   img.src = image.image_url;
@@ -768,13 +769,29 @@ async function deleteLightboxImage() {
   if (imageId == null) {
     return;
   }
-  try {
-    await fetch(`${API}/gallery/images/${encodeURIComponent(imageId)}`, { method: "DELETE" });
-  } catch {
-    // Leave it if deletion fails; the reload below reconciles.
-  }
   closeLightbox();
-  await loadGallery();
+
+  const item = els.gallery.querySelector(`.gallery-item[data-image-id="${CSS.escape(String(imageId))}"]`);
+  const nextSibling = item?.nextSibling ?? null;
+  item?.remove();
+  updateGalleryEmptyState();
+
+  try {
+    const res = await fetch(`${API}/gallery/images/${encodeURIComponent(imageId)}`, { method: "DELETE" });
+    if (!res.ok) {
+      throw new Error(`DELETE -> ${res.status}`);
+    }
+  } catch {
+    // 削除に失敗した場合は元の位置に戻す。
+    if (item) {
+      els.gallery.insertBefore(item, nextSibling);
+      updateGalleryEmptyState();
+    }
+  }
+}
+
+function updateGalleryEmptyState() {
+  els.galleryEmpty.hidden = els.gallery.querySelector(".gallery-item") != null;
 }
 
 function sleep(ms) {

@@ -93,11 +93,39 @@ sealed partial class GalleryPage : Page
         dialog.DeleteConfirmed += async (_, _) =>
         {
             dialog.Hide();
-            await _viewModel.DeleteAsync(item.Image, CancellationToken.None);
-            await ReloadAsync();
+            await DeleteItemAsync(item);
         };
 
         await dialog.ShowAsync();
+    }
+
+    async Task DeleteItemAsync(GalleryImageItem item)
+    {
+        List<GalleryImageItem> items = (List<GalleryImageItem>)ImagesGridView.ItemsSource;
+        int index = items.IndexOf(item);
+        if (index < 0)
+        {
+            return;
+        }
+
+        items.RemoveAt(index);
+        ImagesGridView.ItemsSource = null;
+        ImagesGridView.ItemsSource = items;
+        EmptyTextBlock.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        string? error = await _viewModel.DeleteAsync(item.Image, CancellationToken.None);
+
+        if (error is not null)
+        {
+            items.Insert(Math.Min(index, items.Count), item);
+            ImagesGridView.ItemsSource = null;
+            ImagesGridView.ItemsSource = items;
+            EmptyTextBlock.Visibility = Visibility.Collapsed;
+
+            ErrorInfoBar.Title = ResourceLoader.GetString("GalleryPage_LoadErrorTitle");
+            ErrorInfoBar.Message = error;
+            ErrorInfoBar.IsOpen = true;
+        }
     }
 }
 
