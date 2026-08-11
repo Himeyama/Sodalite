@@ -1,16 +1,17 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using Microsoft.UI.Dispatching;
 using Sodalite.Models;
 using Sodalite.Services;
 
 namespace Sodalite.ViewModels;
 
+/// <summary>
+/// 呼び出し元 (<see cref="Sodalite.Views.GalleryPage"/>) が常に UI スレッドから呼ぶ前提の
+/// ViewModel。<see cref="Images"/> への変更は各メソッドが返る前に同期的に完了する。
+/// </summary>
 sealed class GalleryViewModel : INotifyPropertyChanged
 {
-    readonly DispatcherQueue _dispatcherQueue;
-
     BackendApiClient? _apiClient;
     bool _isLoading;
     string? _errorMessage;
@@ -18,8 +19,6 @@ sealed class GalleryViewModel : INotifyPropertyChanged
     public ObservableCollection<GalleryImageInfo> Images { get; } = [];
 
     public event PropertyChangedEventHandler? PropertyChanged;
-
-    public GalleryViewModel(DispatcherQueue dispatcherQueue) => _dispatcherQueue = dispatcherQueue;
 
     public bool IsLoading
     {
@@ -41,29 +40,28 @@ sealed class GalleryViewModel : INotifyPropertyChanged
 
         try
         {
-            List<GalleryImageInfo> images = await apiClient.GetGalleryImagesAsync(ct).ConfigureAwait(false);
-            _dispatcherQueue.TryEnqueue(() =>
+            List<GalleryImageInfo> images = await apiClient.GetGalleryImagesAsync(ct);
+            Images.Clear();
+            foreach (GalleryImageInfo image in images)
             {
-                Images.Clear();
-                foreach (GalleryImageInfo image in images)
-                {
-                    Images.Add(image);
-                }
-            });
+                Images.Add(image);
+            }
         }
         catch (Exception ex)
         {
-            _dispatcherQueue.TryEnqueue(() => ErrorMessage = ex.Message);
+            ErrorMessage = ex.Message;
         }
         finally
         {
-            _dispatcherQueue.TryEnqueue(() => IsLoading = false);
+            IsLoading = false;
         }
     }
 
     /// <summary>
     /// サーバーから最新一覧 (新しい順) を取得し、既存の <see cref="Images"/> との差分だけを
     /// 追加・削除して並び順をサーバーの結果に合わせる。全消去して作り直すことはしない。
+    /// 呼び出し元の UI スレッド上で呼ばれる前提で、<see cref="Images"/> への変更は
+    /// このメソッドが返る前に同期的に完了する。
     /// </summary>
     public async Task<GalleryDiff?> RefreshAsync(BackendApiClient apiClient, CancellationToken ct)
     {
@@ -71,48 +69,45 @@ sealed class GalleryViewModel : INotifyPropertyChanged
 
         try
         {
-            List<GalleryImageInfo> latest = await apiClient.GetGalleryImagesAsync(ct).ConfigureAwait(false);
+            List<GalleryImageInfo> latest = await apiClient.GetGalleryImagesAsync(ct);
             HashSet<string> latestIds = latest.Select(image => image.ImageId).ToHashSet();
             HashSet<string> currentIds = Images.Select(image => image.ImageId).ToHashSet();
 
             List<GalleryImageInfo> added = latest.Where(image => !currentIds.Contains(image.ImageId)).ToList();
             List<GalleryImageInfo> removed = Images.Where(image => !latestIds.Contains(image.ImageId)).ToList();
 
-            if (added.Count > 0 || removed.Count > 0)
+            foreach (GalleryImageInfo image in removed)
             {
-                _dispatcherQueue.TryEnqueue(() =>
-                {
-                    foreach (GalleryImageInfo image in removed)
-                    {
-                        Images.Remove(image);
-                    }
+                Images.Remove(image);
+            }
 
-                    for (int i = 0; i < latest.Count; i++)
-                    {
-                        GalleryImageInfo image = latest[i];
-                        int currentIndex = Images.IndexOf(image);
-                        if (currentIndex < 0)
-                        {
-                            Images.Insert(Math.Min(i, Images.Count), image);
-                        }
-                        else if (currentIndex != i)
-                        {
-                            Images.Move(currentIndex, Math.Min(i, Images.Count - 1));
-                        }
-                    }
-                });
+            for (int i = 0; i < latest.Count; i++)
+            {
+                GalleryImageInfo image = latest[i];
+                int currentIndex = Images.IndexOf(image);
+                if (currentIndex < 0)
+                {
+                    Images.Insert(Math.Min(i, Images.Count), image);
+                }
+                else if (currentIndex != i)
+                {
+                    Images.Move(currentIndex, Math.Min(i, Images.Count - 1));
+                }
             }
 
             return new GalleryDiff(added, removed);
         }
         catch (Exception ex)
         {
-            _dispatcherQueue.TryEnqueue(() => ErrorMessage = ex.Message);
+            ErrorMessage = ex.Message;
             return null;
         }
     }
 
-    /// <summary>削除に成功したら null、失敗したらエラーメッセージを返す。</summary>
+    /// <summary>
+    /// 削除に成功したら null、失敗したらエラーメッセージを返す。呼び出し元の UI スレッド上で
+    /// 呼ばれる前提で、<see cref="Images"/> への変更はこのメソッドが返る前に同期的に完了する。
+    /// </summary>
     public async Task<string?> DeleteAsync(GalleryImageInfo image, CancellationToken ct)
     {
         if (_apiClient is not BackendApiClient apiClient)
@@ -130,16 +125,13 @@ sealed class GalleryViewModel : INotifyPropertyChanged
 
         try
         {
-            await apiClient.DeleteGalleryImageAsync(image.ImageId, ct).ConfigureAwait(false);
+            await apiClient.DeleteGalleryImageAsync(image.ImageId, ct);
             return null;
         }
         catch (Exception ex)
         {
-            _dispatcherQueue.TryEnqueue(() =>
-            {
-                int insertIndex = Math.Min(originalIndex, Images.Count);
-                Images.Insert(insertIndex, image);
-            });
+            int insertIndex = Math.Min(originalIndex, Images.Count);
+            Images.Insert(insertIndex, image);
             return ex.Message;
         }
     }

@@ -29,7 +29,7 @@ sealed partial class GalleryPage : Page
     public GalleryPage()
     {
         InitializeComponent();
-        _viewModel = new GalleryViewModel(DispatcherQueue);
+        _viewModel = new GalleryViewModel();
     }
 
     public async void Initialize(BackendApiClient apiClient)
