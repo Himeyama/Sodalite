@@ -14,7 +14,7 @@ Unicode true
 ; 製品メタ情報
 ;--------------------------------
 !ifndef PRODUCT_VERSION
-  !define PRODUCT_VERSION "0.7.4"
+  !define PRODUCT_VERSION "0.8.0"
 !endif
 
 !define PRODUCT_NAME "Sodalite"

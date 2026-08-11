@@ -1,6 +1,6 @@
 [project]
 name = "sodalite-backend"
-version = "0.7.4"
+version = "0.8.0"
 description = "Sodalite local image-generation backend"
 readme = "README.md"
 authors = [

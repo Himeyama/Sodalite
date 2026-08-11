@@ -8,7 +8,7 @@
 # 使い方: installer\build-installer.ps1 [-Version 1.0.0]
 
 param(
-    [string]$Version = "0.7.4"
+    [string]$Version = "0.8.0"
 )
 
 $ErrorActionPreference = "Stop"
