@@ -649,7 +649,14 @@ function showGallerySkeleton() {
   }
 }
 
+let hasLoadedGalleryOnce = false;
+
 async function loadGallery() {
+  if (hasLoadedGalleryOnce) {
+    await refreshGalleryDiff();
+    return;
+  }
+
   showGallerySkeleton();
   let images;
   try {
@@ -663,6 +670,47 @@ async function loadGallery() {
   for (const image of images) {
     els.gallery.appendChild(buildGalleryItem(image));
   }
+  hasLoadedGalleryOnce = true;
+}
+
+// 既に一覧を表示済みの状態で再度ギャラリーを開いたときに使う。全件を取得し直すが、
+// 画像要素は追加・削除された分だけ組み替えて、既存のサムネイル表示を維持する。
+async function refreshGalleryDiff() {
+  let images;
+  try {
+    images = await getJson("/gallery/images");
+  } catch {
+    return;
+  }
+
+  const latestIds = new Set(images.map((image) => String(image.image_id ?? "")));
+  for (const el of Array.from(els.gallery.querySelectorAll(".gallery-item"))) {
+    if (!latestIds.has(el.dataset.imageId)) {
+      el.remove();
+    }
+  }
+
+  // サーバーは新しい順で返すため、その並び順のまま先頭から確定させていけば表示順も一致する。
+  // 既存要素はそのまま (サムネイルの再読み込みを避ける)、新規分だけ組み立てて挿入する。
+  let anchor = els.gallery.firstChild;
+  for (const image of images) {
+    const imageId = String(image.image_id ?? "");
+    const existing = anchor?.dataset.imageId === imageId ? anchor : els.gallery.querySelector(
+      `.gallery-item[data-image-id="${CSS.escape(imageId)}"]`,
+    );
+
+    if (existing) {
+      if (existing !== anchor) {
+        els.gallery.insertBefore(existing, anchor);
+      }
+      anchor = existing.nextSibling;
+    } else {
+      const item = buildGalleryItem(image);
+      els.gallery.insertBefore(item, anchor);
+    }
+  }
+
+  updateGalleryEmptyState();
 }
 
 async function onGalleryRefresh() {

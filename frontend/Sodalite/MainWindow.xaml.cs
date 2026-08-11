@@ -16,6 +16,7 @@ public sealed partial class MainWindow : Window
 
     readonly BackendProcessManager _backendProcessManager = new(BackendLocator.BackendProjectPath);
     readonly GenerationPage _generationPage;
+    readonly GalleryPage _galleryPage = new();
     readonly SystemMonitorService _systemMonitorService = new();
     readonly DispatcherTimer _systemStatsTimer;
     BackendApiClient? _apiClient;
@@ -40,6 +41,9 @@ public sealed partial class MainWindow : Window
         _generationPage.StatusChanged += (_, status) => StatusBarTextBlock.Text = status;
         _generationPage.DeviceInfoChanged += (_, deviceInfo) => StatusBarDeviceInfoTextBlock.Text = deviceInfo;
         _generationPage.NotifyCurrentStatus();
+
+        _galleryPage.BackRequested += GalleryPage_BackRequested;
+        _galleryPage.ReuseParametersRequested += GalleryPage_ReuseParametersRequested;
 
         RootHost.Children.Add(_generationPage);
 
@@ -248,11 +252,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        GalleryPage page = new();
-        page.BackRequested += GalleryPage_BackRequested;
-        page.ReuseParametersRequested += GalleryPage_ReuseParametersRequested;
-        page.Initialize(apiClient);
-        await SlideToPageAsync(page, reverse: false);
+        _galleryPage.Initialize(apiClient);
+        await SlideToPageAsync(_galleryPage, reverse: false);
     }
 
     async void GalleryPage_BackRequested(object? sender, EventArgs e) =>

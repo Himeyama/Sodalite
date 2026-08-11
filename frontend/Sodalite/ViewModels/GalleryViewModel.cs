@@ -61,6 +61,57 @@ sealed class GalleryViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// サーバーから最新一覧 (新しい順) を取得し、既存の <see cref="Images"/> との差分だけを
+    /// 追加・削除して並び順をサーバーの結果に合わせる。全消去して作り直すことはしない。
+    /// </summary>
+    public async Task<GalleryDiff?> RefreshAsync(BackendApiClient apiClient, CancellationToken ct)
+    {
+        _apiClient = apiClient;
+
+        try
+        {
+            List<GalleryImageInfo> latest = await apiClient.GetGalleryImagesAsync(ct).ConfigureAwait(false);
+            HashSet<string> latestIds = latest.Select(image => image.ImageId).ToHashSet();
+            HashSet<string> currentIds = Images.Select(image => image.ImageId).ToHashSet();
+
+            List<GalleryImageInfo> added = latest.Where(image => !currentIds.Contains(image.ImageId)).ToList();
+            List<GalleryImageInfo> removed = Images.Where(image => !latestIds.Contains(image.ImageId)).ToList();
+
+            if (added.Count > 0 || removed.Count > 0)
+            {
+                _dispatcherQueue.TryEnqueue(() =>
+                {
+                    foreach (GalleryImageInfo image in removed)
+                    {
+                        Images.Remove(image);
+                    }
+
+                    for (int i = 0; i < latest.Count; i++)
+                    {
+                        GalleryImageInfo image = latest[i];
+                        int currentIndex = Images.IndexOf(image);
+                        if (currentIndex < 0)
+                        {
+                            Images.Insert(Math.Min(i, Images.Count), image);
+                        }
+                        else if (currentIndex != i)
+                        {
+                            Images.Move(currentIndex, Math.Min(i, Images.Count - 1));
+                        }
+                    }
+                });
+            }
+
+            return new GalleryDiff(added, removed);
+        }
+        catch (Exception ex)
+        {
+            _dispatcherQueue.TryEnqueue(() => ErrorMessage = ex.Message);
+            return null;
+        }
+    }
+
     /// <summary>削除に成功したら null、失敗したらエラーメッセージを返す。</summary>
     public async Task<string?> DeleteAsync(GalleryImageInfo image, CancellationToken ct)
     {
@@ -104,3 +155,5 @@ sealed class GalleryViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
+
+sealed record GalleryDiff(IReadOnlyList<GalleryImageInfo> Added, IReadOnlyList<GalleryImageInfo> Removed);

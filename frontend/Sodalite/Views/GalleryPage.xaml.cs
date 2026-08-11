@@ -18,6 +18,7 @@ sealed partial class GalleryPage : Page
     readonly GalleryViewModel _viewModel;
 
     BackendApiClient _apiClient = null!;
+    bool _hasLoadedOnce;
 
     /// <summary>戻る操作が要求されたときに発火する。オーナー側で前の画面へ復帰させる。</summary>
     public event EventHandler? BackRequested;
@@ -34,7 +35,15 @@ sealed partial class GalleryPage : Page
     public async void Initialize(BackendApiClient apiClient)
     {
         _apiClient = apiClient;
-        await ReloadAsync();
+
+        if (_hasLoadedOnce)
+        {
+            await RefreshDiffAsync();
+        }
+        else
+        {
+            await ReloadAsync();
+        }
     }
 
     async Task ReloadAsync()
@@ -55,13 +64,56 @@ sealed partial class GalleryPage : Page
         }
 
         ImagesGridView.ItemsSource = _viewModel.Images
-            .Select(image =>
-            {
-                Uri thumbnailUri = new(_apiClient.BaseAddress, image.ImageUrl);
-                return new GalleryImageItem(image, thumbnailUri, new BitmapImage(thumbnailUri));
-            })
+            .Select(BuildItem)
             .ToList();
         EmptyTextBlock.Visibility = _viewModel.Images.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        _hasLoadedOnce = true;
+    }
+
+    /// <summary>
+    /// 既に一覧を表示済みの状態で再度開かれたときに使う。全件を取得し直すが、
+    /// サムネイル画像は追加・削除された分だけを組み立てて既存の表示を維持する。
+    /// </summary>
+    async Task RefreshDiffAsync()
+    {
+        GalleryDiff? diff = await _viewModel.RefreshAsync(_apiClient, CancellationToken.None);
+
+        if (diff is null)
+        {
+            if (_viewModel.ErrorMessage is string error)
+            {
+                ErrorInfoBar.Title = ResourceLoader.GetString("GalleryPage_LoadErrorTitle");
+                ErrorInfoBar.Message = error;
+                ErrorInfoBar.IsOpen = true;
+            }
+
+            return;
+        }
+
+        if (diff.Added.Count == 0 && diff.Removed.Count == 0)
+        {
+            return;
+        }
+
+        List<GalleryImageItem> items = ((List<GalleryImageItem>)ImagesGridView.ItemsSource)
+            .Where(item => !diff.Removed.Contains(item.Image))
+            .ToList();
+
+        foreach (GalleryImageInfo added in diff.Added)
+        {
+            int insertIndex = _viewModel.Images.IndexOf(added);
+            items.Insert(Math.Clamp(insertIndex, 0, items.Count), BuildItem(added));
+        }
+
+        ImagesGridView.ItemsSource = null;
+        ImagesGridView.ItemsSource = items;
+        EmptyTextBlock.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    GalleryImageItem BuildItem(GalleryImageInfo image)
+    {
+        Uri thumbnailUri = new(_apiClient.BaseAddress, image.ImageUrl);
+        return new GalleryImageItem(image, thumbnailUri, new BitmapImage(thumbnailUri));
     }
 
     void BackButton_Click(object sender, RoutedEventArgs e) => BackRequested?.Invoke(this, EventArgs.Empty);
