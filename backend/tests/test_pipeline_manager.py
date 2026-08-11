@@ -11,7 +11,9 @@ def _make_manager() -> PipelineManager:
         "sodalite_backend.inference.pipeline_manager.AutoPipelineForText2Image"
     ) as mock_auto:
         mock_auto.from_pretrained.return_value.to.return_value = MagicMock()
-        return PipelineManager("stub/model")
+        manager = PipelineManager()
+        manager.load_initial_model("stub/model")
+        return manager
 
 
 def test_load_model_uses_from_pretrained_for_repo_id() -> None:

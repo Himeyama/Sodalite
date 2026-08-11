@@ -34,6 +34,9 @@ public sealed partial class GenerationPage : Page
 
     public event EventHandler<string>? DeviceInfoChanged;
 
+    /// <summary>初回モデルのロードが完了し、生成・モデル切り替えが可能になったときに発火する。</summary>
+    public event EventHandler? BackendReadyChanged;
+
     /// <summary>FileSavePicker の初期化に使うオーナーウィンドウ。MainWindow から注入する。</summary>
     internal Window? OwnerWindow { get; set; }
 
@@ -166,6 +169,7 @@ public sealed partial class GenerationPage : Page
                 {
                     _backendStartingSpinnerTimer.Stop();
                     GenerateButton.Content = ResourceLoader.GetString("Generation_GenerateButtonLabel");
+                    BackendReadyChanged?.Invoke(this, EventArgs.Empty);
                 }
 
                 GenerateButton.IsEnabled = _viewModel.IsBackendReady && !_viewModel.IsGenerating;

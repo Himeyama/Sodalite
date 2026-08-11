@@ -1,5 +1,6 @@
 """FastAPI application entry point for the Sodalite backend."""
 
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -39,12 +40,27 @@ def create_app(model_id: str) -> FastAPI:
         # left to blow up pipeline loading.
         saved_model_id = load_active_model_id()
         startup_model_id = saved_model_id if _model_id_still_available(saved_model_id) else model_id
-        app.state.pipeline_manager = PipelineManager(startup_model_id)
-        app.state.job_manager = JobManager(app.state.pipeline_manager)
+
+        pipeline_manager = PipelineManager()
+        app.state.pipeline_manager = pipeline_manager
+        app.state.job_manager = JobManager(pipeline_manager)
+
         # A local file is an imported checkpoint; a repo id is a known HF model to
         # keep in the list. Either way the startup model is always offered.
         if not Path(startup_model_id).is_file():
             add_known_hf_model_id(startup_model_id)
+
+        # Loading the model onto the device (VRAM) takes seconds to minutes.
+        # Running it on a background thread lets uvicorn start accepting
+        # requests immediately, so health checks and gallery browsing work
+        # while the model is still loading; generation endpoints raise
+        # ModelNotReadyError until `pipeline_manager.is_ready` is true.
+        threading.Thread(
+            target=pipeline_manager.load_initial_model,
+            args=(startup_model_id,),
+            daemon=True,
+        ).start()
+
         yield
 
     app = FastAPI(title="Sodalite Backend", lifespan=lifespan)

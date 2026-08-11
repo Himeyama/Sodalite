@@ -31,6 +31,7 @@ def health(request: Request) -> dict[str, object]:
         "status": "ok",
         "device": pipeline_manager.device,
         "loaded_model": pipeline_manager.model_id,
+        "model_ready": pipeline_manager.is_ready,
     }
 
 
@@ -48,6 +49,8 @@ def models(request: Request) -> list[ModelInfo]:
 @router.post("/models/active")
 def set_active_model(request: Request, body: SetActiveModelRequest) -> ModelInfo:
     pipeline_manager = request.app.state.pipeline_manager
+    if not pipeline_manager.is_ready:
+        raise HTTPException(status_code=503, detail="The initial model is still loading.")
     try:
         pipeline_manager.load_model(body.model_id)
     except OSError as error:

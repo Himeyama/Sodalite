@@ -18,13 +18,33 @@ from sodalite_backend.inference.samplers import SAMPLER_CLASSES
 from sodalite_backend.schemas.generation import LoraSpec, Sampler
 
 
-class PipelineManager:
-    """Owns a single loaded text-to-image pipeline, moved onto the best available device."""
+class ModelNotReadyError(Exception):
+    """Raised when an operation needs the pipeline but no model has finished loading yet."""
 
-    def __init__(self, model_id: str) -> None:
+
+class PipelineManager:
+    """Owns a single loaded text-to-image pipeline, moved onto the best available device.
+
+    The initial model load is kicked off separately from construction (see
+    `load_initial_model`) so the server can start accepting requests (health
+    checks, gallery browsing) while the first model is still loading onto the
+    device. Any operation that needs the pipeline raises `ModelNotReadyError`
+    until that load finishes.
+    """
+
+    def __init__(self) -> None:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model_id = model_id
+        self.model_id: str | None = None
+        self._pipeline: DiffusionPipeline | None = None
+
+    @property
+    def is_ready(self) -> bool:
+        return self._pipeline is not None
+
+    def load_initial_model(self, model_id: str) -> None:
+        """Load the first model. Intended to run once, before any `load_model` call."""
         self._pipeline = self._load_pipeline(model_id)
+        self.model_id = model_id
 
     def load_model(self, model_id: str) -> None:
         """Replace the currently loaded pipeline with a different model.
@@ -44,6 +64,11 @@ class PipelineManager:
         gc.collect()
         if self.device == "cuda":
             torch.cuda.empty_cache()
+
+    def _require_pipeline(self) -> DiffusionPipeline:
+        if self._pipeline is None:
+            raise ModelNotReadyError("No model has finished loading yet.")
+        return self._pipeline
 
     def _load_pipeline(self, model_id: str) -> DiffusionPipeline:
         dtype = torch.float16 if self.device == "cuda" else torch.float32
@@ -66,8 +91,9 @@ class PipelineManager:
             ).to(self.device)
 
     def set_sampler(self, sampler: Sampler) -> None:
+        pipeline = self._require_pipeline()
         scheduler_cls = SAMPLER_CLASSES[sampler]
-        self._pipeline.scheduler = scheduler_cls.from_config(self._pipeline.scheduler.config)
+        pipeline.scheduler = scheduler_cls.from_config(pipeline.scheduler.config)
 
     def _apply_loras(self, loras: list[LoraSpec]) -> None:
         """Load the requested LoRAs onto the pipeline and activate them by weight.
@@ -87,7 +113,7 @@ class PipelineManager:
                 adapter_weights.append(lora.weight)
 
         if adapter_names:
-            self._pipeline.set_adapters(adapter_names, adapter_weights=adapter_weights)
+            self._require_pipeline().set_adapters(adapter_names, adapter_weights=adapter_weights)
 
     def _load_single_lora(self, model_id: str, adapter_name: str) -> bool:
         """Load one LoRA onto the pipeline, returning whether it was applied.
@@ -103,7 +129,7 @@ class PipelineManager:
         Returns False (and unloads any partial state) when the LoRA is
         incompatible with the active checkpoint, so the caller can move on.
         """
-        pipeline = self._pipeline
+        pipeline = self._require_pipeline()
         try:
             state_dict, network_alphas, metadata = pipeline.lora_state_dict(
                 model_id, unet_config=pipeline.unet.config, return_lora_metadata=True
@@ -149,7 +175,7 @@ class PipelineManager:
 
     def _clear_loras(self) -> None:
         """Remove any LoRA weights so they don't leak into later generations or model switches."""
-        self._pipeline.unload_lora_weights()
+        self._require_pipeline().unload_lora_weights()
 
     def generate(
         self,
@@ -176,7 +202,10 @@ class PipelineManager:
         long batch can be cancelled without waiting for it to run to completion.
         `on_step`, if given, is called after each denoising step with
         `(step_index, total_steps)` so the caller can surface within-image progress.
+
+        Raises `ModelNotReadyError` if no model has finished loading yet.
         """
+        pipeline = self._require_pipeline()
         self.set_sampler(sampler)
 
         if loras:
@@ -200,7 +229,7 @@ class PipelineManager:
                         on_step(step_index + 1, steps)
                     return callback_kwargs
 
-                result = self._pipeline(
+                result = pipeline(
                     prompt=prompt,
                     negative_prompt=negative_prompt or None,
                     num_inference_steps=steps,

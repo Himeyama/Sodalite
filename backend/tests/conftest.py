@@ -14,6 +14,7 @@ def mock_pipeline_manager() -> MagicMock:
     manager = MagicMock()
     manager.device = "cpu"
     manager.model_id = "stub/model"
+    manager.is_ready = True
     manager.generate.return_value = [Image.new("RGB", (8, 8))]
     return manager
 
@@ -26,7 +27,11 @@ def client(mock_pipeline_manager: MagicMock, tmp_path, monkeypatch) -> Iterator[
 
     from sodalite_backend import main as main_module
 
-    monkeypatch.setattr(main_module, "PipelineManager", lambda model_id: mock_pipeline_manager)
+    # main.py constructs PipelineManager() with no args, then calls
+    # load_initial_model(model_id) on a background thread. Tests need the
+    # model to appear ready synchronously, so the mock's load_initial_model
+    # is a no-op and is_ready/model_id are already set above.
+    monkeypatch.setattr(main_module, "PipelineManager", lambda: mock_pipeline_manager)
 
     app = main_module.create_app("stub/model")
     with TestClient(app) as test_client:

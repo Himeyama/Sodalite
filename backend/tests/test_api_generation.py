@@ -10,7 +10,12 @@ from sodalite_backend.schemas.generation import ModelInfo
 def test_health(client: TestClient) -> None:
     response = client.get("/api/v1/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "device": "cpu", "loaded_model": "stub/model"}
+    assert response.json() == {
+        "status": "ok",
+        "device": "cpu",
+        "loaded_model": "stub/model",
+        "model_ready": True,
+    }
 
 
 def test_samplers(client: TestClient) -> None:

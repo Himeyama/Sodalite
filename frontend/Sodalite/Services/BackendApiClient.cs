@@ -83,7 +83,7 @@ sealed class BackendApiClient(int port) : IDisposable
         HealthDto dto = await _http.GetFromJsonAsync<HealthDto>("/api/v1/health", ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Empty response from backend.");
 
-        return new HealthInfo(dto.Status, dto.Device, dto.LoadedModel);
+        return new HealthInfo(dto.Status, dto.Device, dto.LoadedModel, dto.ModelReady);
     }
 
     public async Task<List<ModelInfo>> GetModelsAsync(CancellationToken ct)
@@ -205,7 +205,8 @@ sealed class BackendApiClient(int port) : IDisposable
     sealed record HealthDto(
         string Status,
         string Device,
-        [property: JsonPropertyName("loaded_model")] string LoadedModel);
+        [property: JsonPropertyName("loaded_model")] string? LoadedModel,
+        [property: JsonPropertyName("model_ready")] bool ModelReady);
 
     sealed record GalleryImageDto(
         [property: JsonPropertyName("image_id")] string ImageId,
@@ -242,6 +243,6 @@ sealed class BackendApiClient(int port) : IDisposable
         [property: JsonPropertyName("lora_dir")] string? LoraDir);
 }
 
-sealed record HealthInfo(string Status, string Device, string LoadedModel);
+sealed record HealthInfo(string Status, string Device, string? LoadedModel, bool ModelReady);
 
 sealed record ScanDirectories(string? ModelDir, string? LoraDir);

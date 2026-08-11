@@ -40,6 +40,7 @@ public sealed partial class MainWindow : Window
         _generationPage = new GenerationPage { OwnerWindow = this };
         _generationPage.StatusChanged += (_, status) => StatusBarTextBlock.Text = status;
         _generationPage.DeviceInfoChanged += (_, deviceInfo) => StatusBarDeviceInfoTextBlock.Text = deviceInfo;
+        _generationPage.BackendReadyChanged += (_, _) => ModelSelectionButton.IsEnabled = true;
         _generationPage.NotifyCurrentStatus();
 
         _galleryPage.BackRequested += GalleryPage_BackRequested;
@@ -174,10 +175,13 @@ public sealed partial class MainWindow : Window
             {
                 SetupOverlay.Visibility = Visibility.Collapsed;
 
-                _generationPage.AttachBackend(_apiClient);
-
-                ModelSelectionButton.IsEnabled = true;
+                // サーバー自体はここで応答可能になっているが、初回モデルはバックグラウンドで
+                // まだ VRAM に展開中のことがある。ギャラリーはモデル不要なので即座に使えるが、
+                // モデル切り替え・生成はロード完了を待つ必要があるため、ModelSelectionButton は
+                // _generationPage.AttachBackend が IsBackendReady を立てるまで無効のままにする。
                 GalleryButton.IsEnabled = true;
+
+                _generationPage.AttachBackend(_apiClient);
 
                 UpdateWebUiToggleUi();
             });

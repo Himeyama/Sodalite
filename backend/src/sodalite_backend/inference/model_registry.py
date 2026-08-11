@@ -18,15 +18,19 @@ from sodalite_backend.schemas.generation import ModelInfo
 CHECKPOINT_EXTENSIONS = {".safetensors", ".ckpt"}
 
 
-def list_cached_models(active_model_id: str) -> list[ModelInfo]:
-    """List the offered models (known HF repos + scanned checkpoints), flagging the active one."""
+def list_cached_models(active_model_id: str | None) -> list[ModelInfo]:
+    """List the offered models (known HF repos + scanned checkpoints), flagging the active one.
+
+    `active_model_id` is `None` while the initial model is still loading in the
+    background; in that case nothing is flagged active.
+    """
     models = _list_hf_models(active_model_id) + _list_directory_models(active_model_id)
-    if not any(model.is_active for model in models):
+    if active_model_id is not None and not any(model.is_active for model in models):
         models.append(ModelInfo(model_id=active_model_id, is_active=True, size_on_disk_bytes=0))
     return sorted(models, key=lambda model: model.model_id)
 
 
-def _list_hf_models(active_model_id: str) -> list[ModelInfo]:
+def _list_hf_models(active_model_id: str | None) -> list[ModelInfo]:
     """Known HF repos that are actually present in the cache as a usable pipeline."""
     known_ids = set(load_known_hf_model_ids())
     sizes = {
@@ -44,7 +48,7 @@ def _list_hf_models(active_model_id: str) -> list[ModelInfo]:
     ]
 
 
-def _list_directory_models(active_model_id: str) -> list[ModelInfo]:
+def _list_directory_models(active_model_id: str | None) -> list[ModelInfo]:
     """Single-file checkpoints found by scanning the configured model directory."""
     model_dir = load_directories().model_dir
     if model_dir is None:

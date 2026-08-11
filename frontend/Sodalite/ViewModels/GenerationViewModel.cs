@@ -187,6 +187,10 @@ sealed class GenerationViewModel : INotifyPropertyChanged
         set => SetField(ref _deviceInfo, value);
     }
 
+    /// <summary>
+    /// サーバー自体は起動済みだが、初回モデルはバックグラウンドでまだ VRAM に展開中のことがある。
+    /// 生成には展開済みモデルが要るため、`model_ready` になるまでポーリングしてから使用可能にする。
+    /// </summary>
     public async Task AttachBackendAsync(BackendApiClient apiClient, CancellationToken ct)
     {
         _apiClient = apiClient;
@@ -194,8 +198,6 @@ sealed class GenerationViewModel : INotifyPropertyChanged
         try
         {
             List<string> samplers = await apiClient.GetSamplersAsync(ct).ConfigureAwait(false);
-            HealthInfo health = await apiClient.GetHealthAsync(ct).ConfigureAwait(false);
-
             _dispatcherQueue.TryEnqueue(() =>
             {
                 Samplers = samplers;
@@ -203,7 +205,17 @@ sealed class GenerationViewModel : INotifyPropertyChanged
                 {
                     Sampler = samplers[0];
                 }
+            });
 
+            HealthInfo health = await apiClient.GetHealthAsync(ct).ConfigureAwait(false);
+            while (!health.ModelReady)
+            {
+                await Task.Delay(PollInterval, ct).ConfigureAwait(false);
+                health = await apiClient.GetHealthAsync(ct).ConfigureAwait(false);
+            }
+
+            _dispatcherQueue.TryEnqueue(() =>
+            {
                 DeviceInfo = $"{health.Device} / {DisplayNameFor(health.LoadedModel)}";
                 IsBackendReady = true;
                 StatusText = ResourceLoader.GetString("Generation_Ready");
@@ -221,8 +233,8 @@ sealed class GenerationViewModel : INotifyPropertyChanged
         _dispatcherQueue.TryEnqueue(() => DeviceInfo = $"{health.Device} / {DisplayNameFor(health.LoadedModel)}");
     }
 
-    static string DisplayNameFor(string modelId) =>
-        Path.Exists(modelId) ? Path.GetFileNameWithoutExtension(modelId) : modelId;
+    static string DisplayNameFor(string? modelId) =>
+        modelId is not null && Path.Exists(modelId) ? Path.GetFileNameWithoutExtension(modelId) : modelId ?? "";
 
     /// <summary>画像が1枚完成するたびに発火する。ギャラリー等、他画面への反映に使う。</summary>
     public event EventHandler? ImageCompleted;
@@ -327,7 +339,11 @@ sealed class GenerationViewModel : INotifyPropertyChanged
                 case "completed":
                     if (_batchTotalImages <= 1)
                     {
-                        double doneSeconds = _generatingStopwatch.Elapsed.TotalSeconds;
+                        // 画像完成のたびにリセットされる _generatingStopwatch ではなく、
+                        // バッチ開始からの累計を持つ _batchStopwatch を使う。1枚しかない
+                        // バッチでは画像完成直後にリセットが起き、_generatingStopwatch は
+                        // ほぼ 0 秒になってしまうため。
+                        double doneSeconds = _batchStopwatch.Elapsed.TotalSeconds;
                         _dispatcherQueue.TryEnqueue(() => StatusText = string.Format(ResourceLoader.GetString("Generation_Done"), doneSeconds));
                     }
 
