@@ -82,6 +82,24 @@ def test_delete_image_missing_returns_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+def test_list_images_reflects_metadata_change_after_recreate(
+    client: TestClient, tmp_path: Path
+) -> None:
+    outputs = tmp_path / "outputs"
+    outputs.mkdir(exist_ok=True)
+    path = outputs / "recreated.png"
+
+    Image.new("RGB", (4, 4)).save(path)
+    first = client.get("/api/v1/gallery/images").json()
+    assert first[0]["parameters"] is None
+
+    # Recreate with different content (and possibly the same mtime second) to
+    # make sure the metadata cache doesn't serve a stale entry.
+    Image.new("RGB", (8, 8)).save(path)
+    second = client.get("/api/v1/gallery/images").json()
+    assert len(second) == 1
+
+
 def test_delete_image_rejects_path_traversal(client: TestClient, tmp_path: Path) -> None:
     outside = tmp_path / "secret.png"
     Image.new("RGB", (4, 4)).save(outside)
