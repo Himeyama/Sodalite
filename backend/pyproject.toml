@@ -6,20 +6,31 @@ readme = "README.md"
 authors = [
     { name = "ひかり", email = "hikari.photon+dev@gmail.com" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "accelerate>=1.14.0",
-    "diffusers>=0.39.0",
+    "diffusers>=0.35.2,<0.36",
     "fastapi>=0.139.0",
-    "huggingface-hub>=1.22.0",
+    "huggingface-hub>=0.34,<1",
     "peft>=0.19.0",
     "pillow>=12.3.0",
     "pydantic>=2.13.4",
     "safetensors>=0.8.0",
+    "transformers>=4.41,<5",
+    "uvicorn[standard]>=0.49.0",
+]
+
+[project.optional-dependencies]
+cpu = [
     "torch>=2.4",
     "torchvision>=0.21.0",
-    "transformers>=5.13.0",
-    "uvicorn[standard]>=0.49.0",
+]
+cuda = [
+    "torch>=2.4",
+    "torchvision>=0.21.0",
+]
+directml = [
+    "torch-directml>=0.2.5.dev240914",
 ]
 
 [project.scripts]
@@ -30,8 +41,35 @@ requires = ["uv_build>=0.8.17,<0.9.0"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu124" }
-torchvision = { index = "pytorch-cu124" }
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu124", extra = "cuda" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu124", extra = "cuda" },
+]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cuda" },
+    ],
+    [
+        { extra = "cpu" },
+        { extra = "directml" },
+    ],
+    [
+        { extra = "cuda" },
+        { extra = "directml" },
+    ],
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [[tool.uv.index]]
 name = "pytorch-cu124"

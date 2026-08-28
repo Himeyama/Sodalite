@@ -73,6 +73,14 @@ sealed class BackendProcessManager : IAsyncDisposable
         startInfo.ArgumentList.Add("run");
         startInfo.ArgumentList.Add("--project");
         startInfo.ArgumentList.Add(_backendProjectPath);
+        // uv run also resolves project dependencies. Keep it on the same accelerator
+        // extra selected by uv sync, otherwise it can replace DirectML's patched
+        // PyTorch with the default PyPI build immediately before backend startup.
+        startInfo.ArgumentList.Add("--extra");
+        startInfo.ArgumentList.Add(_environmentSetup.Accelerator);
+        // EnsureAsync already performed an exact sync. DirectML additionally
+        // removes torchvision after that sync, so do not let uv reinstall it.
+        startInfo.ArgumentList.Add("--no-sync");
         startInfo.ArgumentList.Add("Sodalite-backend");
         startInfo.ArgumentList.Add("--port");
         startInfo.ArgumentList.Add(Port.ToString());

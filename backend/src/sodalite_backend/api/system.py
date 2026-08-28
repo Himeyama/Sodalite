@@ -29,7 +29,7 @@ def health(request: Request) -> dict[str, object]:
     pipeline_manager = request.app.state.pipeline_manager
     return {
         "status": "ok",
-        "device": pipeline_manager.device,
+        "device": pipeline_manager.device_backend,
         "loaded_model": pipeline_manager.model_id,
         "model_ready": pipeline_manager.is_ready,
     }

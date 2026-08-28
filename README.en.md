@@ -7,7 +7,7 @@ A Stable Diffusion image-generation desktop app, built from scratch as an origin
 <img width="600" alt="image" src="https://github.com/user-attachments/assets/e1151f70-408a-4a58-9549-4c01de492100" />
 
 - **Frontend**: WinUI3 (.NET 9 / Windows App SDK)
-- **Backend**: Python 3.13+ / FastAPI / diffusers (managed with uv)
+- **Backend**: Python 3.12 / FastAPI / diffusers (managed with uv)
 - **Communication**: The frontend launches the backend as a local subprocess and talks to it over HTTP.
 - The safety checker is disabled, so 🔞NSFW image generation is possible. Users are responsible for how generated content is used or shared, and must comply with the license of the model in use and the laws of their jurisdiction.
 
@@ -54,8 +54,8 @@ Sodalite/
 
 - Windows 10 22H2 or later / Windows 11
 - .NET 9 SDK
-- Python 3.13+ and [uv](https://docs.astral.sh/uv/)
-- NVIDIA GPU (CUDA-capable, 8GB+ VRAM recommended; runs on CPU only, but slowly)
+- Python 3.12 and [uv](https://docs.astral.sh/uv/)
+- NVIDIA GPU (CUDA-capable) or AMD Radeon GPU (DirectX 12-capable), with 8GB+ VRAM recommended; runs on CPU only, but slowly
 
 ### First-time setup
 
@@ -110,7 +110,7 @@ You can build an NSIS installer (`Sodalite-Setup-<version>.exe`) for end users.
 
 - **Build side**: .NET 9 SDK, [NSIS](https://nsis.sourceforge.io/) (`makensis`)
 - **End-user side**: [uv](https://docs.astral.sh/uv/) must be installed.
-  Python 3.13 is fetched automatically by uv during first-time setup, so no separate Python installation is required.
+  Python 3.12 is fetched automatically by uv during first-time setup, so no separate Python installation is required.
 
 ### Building the installer
 

@@ -13,6 +13,7 @@ from PIL import Image
 def mock_pipeline_manager() -> MagicMock:
     manager = MagicMock()
     manager.device = "cpu"
+    manager.device_backend = "cpu"
     manager.model_id = "stub/model"
     manager.is_ready = True
     manager.generate.return_value = [Image.new("RGB", (8, 8))]

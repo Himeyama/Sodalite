@@ -7,7 +7,7 @@ Stable Diffusion 画像生成デスクトップアプリ。一から独自実装
 <img width="600" alt="image" src="https://github.com/user-attachments/assets/bb0b7d58-f920-4f02-a92f-6ea247ced829" />
 
 - **フロントエンド**: WinUI3 (.NET 9 / Windows App SDK)
-- **バックエンド**: Python 3.13+ / FastAPI / diffusers (uv管理)
+- **バックエンド**: Python 3.12 / FastAPI / diffusers (uv管理)
 - **通信方式**: フロントエンドがバックエンドをローカルサブプロセスとして起動し、HTTP経由で通信する
 - **ブラウザ webui**: WinUI3 を使わず、バックエンド単体をブラウザ用 UI 付きで起動できる (LAN内の他デバイスからアクセス可能。[後述](#ブラウザ-webui-lanアクセス))
 - セーフティチェッカーは無効化しており、🔞NSFW 画像の生成も可能。生成物の利用・公開は各自の責任・使用モデルのライセンス・居住地の法令に従うこと。
@@ -57,8 +57,8 @@ Sodalite/
 
 - Windows 10 22H2以降 / Windows 11
 - .NET 9 SDK
-- Python 3.13+ と [uv](https://docs.astral.sh/uv/)
-- NVIDIA GPU (CUDA対応、VRAM 8GB以上推奨。CPUのみでも動作するが低速)
+- Python 3.12 と [uv](https://docs.astral.sh/uv/)
+- NVIDIA GPU (CUDA対応) または AMD Radeon GPU (DirectX 12対応)。VRAM 8GB以上推奨。CPUのみでも動作するが低速
 
 ### 初回セットアップ
 
@@ -135,7 +135,7 @@ dotnet build -c Debug
 
 - **ビルド側**: .NET 9 SDK, [NSIS](https://nsis.sourceforge.io/) (`makensis`)
 - **エンドユーザー側**: [uv](https://docs.astral.sh/uv/) がインストール済みであること。
-  Python 3.13 は uv が初回セットアップ時に自動取得するため、別途の Python インストールは不要。
+  Python 3.12 は uv が初回セットアップ時に自動取得するため、別途の Python インストールは不要。
 
 ### インストーラーのビルド
 

@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from sodalite_backend.inference.pipeline_manager import PipelineManager
+from sodalite_backend.inference.pipeline_manager import PipelineManager, _select_device
 from sodalite_backend.schemas.generation import LoraSpec
 
 
@@ -14,6 +14,37 @@ def _make_manager() -> PipelineManager:
         manager = PipelineManager()
         manager.load_initial_model("stub/model")
         return manager
+
+
+def test_select_device_prefers_cuda_over_directml() -> None:
+    with (
+        patch("sodalite_backend.inference.pipeline_manager.torch.cuda.is_available", return_value=True),
+        patch("sodalite_backend.inference.pipeline_manager._get_directml_device") as directml,
+    ):
+        assert _select_device() == ("cuda", "cuda")
+        directml.assert_not_called()
+
+
+def test_select_device_uses_directml_when_cuda_is_unavailable() -> None:
+    dml_device = MagicMock()
+    with (
+        patch("sodalite_backend.inference.pipeline_manager.torch.cuda.is_available", return_value=False),
+        patch(
+            "sodalite_backend.inference.pipeline_manager._get_directml_device",
+            return_value=dml_device,
+        ),
+    ):
+        assert _select_device() == (dml_device, "directml")
+
+
+def test_select_device_falls_back_to_cpu() -> None:
+    with (
+        patch("sodalite_backend.inference.pipeline_manager.torch.cuda.is_available", return_value=False),
+        patch(
+            "sodalite_backend.inference.pipeline_manager._get_directml_device", return_value=None
+        ),
+    ):
+        assert _select_device() == ("cpu", "cpu")
 
 
 def test_load_model_uses_from_pretrained_for_repo_id() -> None:

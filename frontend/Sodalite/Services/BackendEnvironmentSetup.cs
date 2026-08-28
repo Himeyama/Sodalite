@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Security;
 using System.Security.Cryptography;
+using Microsoft.Win32;
 
 namespace Sodalite.Services;
 
@@ -11,7 +13,7 @@ namespace Sodalite.Services;
 /// セットアップが失敗した場合はマーカーを書かないため、次回起動時に自動的に再試行される。
 /// </summary>
 /// <remarks>
-/// uv 本体(uv.exe)はユーザーがインストール済みである前提。Python 3.13 は uv sync が
+/// uv 本体(uv.exe)はユーザーがインストール済みである前提。Python 3.12 は uv sync が
 /// (uv python 管理経由で)必要に応じて自動取得する。
 /// </remarks>
 sealed class UvNotFoundException(string message) : Exception(message);
@@ -25,6 +27,8 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
 
     readonly string _backendProjectPath = backendProjectPath;
 
+    public string Accelerator { get; } = DetectAccelerator();
+
     /// <summary>
     /// 必要であれば <c>uv sync</c> を実行する。既にセットアップ済み(マーカーが現在の uv.lock と一致)
     /// なら何もしない。uv が見つからない場合は <see cref="UvNotFoundException"/> を投げる(マーカーは書かない)。
@@ -35,7 +39,7 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
     /// </param>
     public async Task EnsureAsync(IProgress<string>? onProgress = null, CancellationToken ct = default)
     {
-        string currentLockHash = ComputeLockHash();
+        string currentLockHash = $"{ComputeLockHash()}:{Accelerator}";
 
         if (IsUpToDate(currentLockHash))
         {
@@ -45,10 +49,50 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
         // セットアップ開始の合図(まだログ行が無いので空文字)。UI 側でオーバーレイを表示する契機になる。
         onProgress?.Report(string.Empty);
 
-        await RunUvSyncAsync(onProgress, ct).ConfigureAwait(false);
+        await RunUvSyncAsync(Accelerator, onProgress, ct).ConfigureAwait(false);
+
+        if (Accelerator == "directml")
+        {
+            // torch-directml declares the stock torchvision wheel, but its native
+            // _C.pyd is ABI-incompatible with DirectML's patched PyTorch on Windows.
+            // Sodalite does not use torchvision, so remove it before startup.
+            await RemoveDirectMlTorchvisionAsync(ct).ConfigureAwait(false);
+        }
 
         // uv sync が終了コード 0 で完了した場合のみここに到達する。マーカーを書いて完了を記録する。
         WriteMarker(currentLockHash);
+    }
+
+    async Task RemoveDirectMlTorchvisionAsync(CancellationToken ct)
+    {
+        string venvPath = BackendLocator.VenvPath ?? Path.Combine(_backendProjectPath, ".venv");
+        string pythonPath = Path.Combine(venvPath, "Scripts", "python.exe");
+        ProcessStartInfo startInfo = new()
+        {
+            FileName = "uv",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        startInfo.ArgumentList.Add("pip");
+        startInfo.ArgumentList.Add("uninstall");
+        startInfo.ArgumentList.Add("--python");
+        startInfo.ArgumentList.Add(pythonPath);
+        startInfo.ArgumentList.Add("torchvision");
+
+        using Process process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Failed to start uv pip uninstall.");
+        Task<string> outputTask = process.StandardOutput.ReadToEndAsync(ct);
+        Task<string> errorTask = process.StandardError.ReadToEndAsync(ct);
+        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Removing incompatible DirectML torchvision failed with exit code {process.ExitCode}.");
+        }
     }
 
     bool IsUpToDate(string currentLockHash)
@@ -78,7 +122,7 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
         }
     }
 
-    async Task RunUvSyncAsync(IProgress<string>? onProgress, CancellationToken ct)
+    async Task RunUvSyncAsync(string accelerator, IProgress<string>? onProgress, CancellationToken ct)
     {
         ProcessStartInfo startInfo = new()
         {
@@ -112,6 +156,8 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
 
         startInfo.ArgumentList.Add("sync");
         startInfo.ArgumentList.Add("--no-dev");
+        startInfo.ArgumentList.Add("--extra");
+        startInfo.ArgumentList.Add(accelerator);
         startInfo.ArgumentList.Add("--project");
         startInfo.ArgumentList.Add(_backendProjectPath);
 
@@ -165,6 +211,48 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
                     $"uv sync failed with exit code {process.ExitCode}.");
             }
         }
+    }
+
+    static string DetectAccelerator()
+    {
+        bool hasAmdAdapter = false;
+
+        try
+        {
+            using RegistryKey? videoKey = Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\Video");
+            if (videoKey is null)
+            {
+                return "cpu";
+            }
+
+            foreach (string adapterKeyName in videoKey.GetSubKeyNames())
+            {
+                using RegistryKey? adapterKey = videoKey.OpenSubKey($@"{adapterKeyName}\0000");
+                string description = string.Join(
+                    " ",
+                    adapterKey?.GetValue("DriverDesc") as string ?? string.Empty,
+                    adapterKey?.GetValue("ProviderName") as string ?? string.Empty);
+
+                // CUDA remains preferred on mixed-GPU systems, matching the backend selection order.
+                if (description.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "cuda";
+                }
+
+                if (description.Contains("AMD", StringComparison.OrdinalIgnoreCase)
+                    || description.Contains("Radeon", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasAmdAdapter = true;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return "cpu";
+        }
+
+        return hasAmdAdapter ? "directml" : "cpu";
     }
 
     static void WriteMarker(string lockHash)

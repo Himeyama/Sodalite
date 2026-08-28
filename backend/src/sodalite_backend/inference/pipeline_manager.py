@@ -22,6 +22,32 @@ class ModelNotReadyError(Exception):
     """Raised when an operation needs the pipeline but no model has finished loading yet."""
 
 
+def _get_directml_device() -> torch.device | None:
+    """Return the DirectML device when its optional Windows backend is installed."""
+    try:
+        import torch_directml
+    except ImportError:
+        return None
+
+    try:
+        return torch_directml.device()
+    except RuntimeError:
+        # A package may remain installed after the machine changes, or no
+        # DirectX 12 adapter may be available. In either case CPU is safer.
+        return None
+
+
+def _select_device() -> tuple[torch.device | str, str]:
+    """Select CUDA first, then DirectML, and finally CPU."""
+    if torch.cuda.is_available():
+        return "cuda", "cuda"
+
+    if directml_device := _get_directml_device():
+        return directml_device, "directml"
+
+    return "cpu", "cpu"
+
+
 class PipelineManager:
     """Owns a single loaded text-to-image pipeline, moved onto the best available device.
 
@@ -33,7 +59,7 @@ class PipelineManager:
     """
 
     def __init__(self) -> None:
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device, self.device_backend = _select_device()
         self.model_id: str | None = None
         self._pipeline: DiffusionPipeline | None = None
 
@@ -62,7 +88,7 @@ class PipelineManager:
 
         del old_pipeline
         gc.collect()
-        if self.device == "cuda":
+        if self.device_backend == "cuda":
             torch.cuda.empty_cache()
 
     def _require_pipeline(self) -> DiffusionPipeline:
@@ -71,7 +97,7 @@ class PipelineManager:
         return self._pipeline
 
     def _load_pipeline(self, model_id: str) -> DiffusionPipeline:
-        dtype = torch.float16 if self.device == "cuda" else torch.float32
+        dtype = torch.float16 if self.device_backend in {"cuda", "directml"} else torch.float32
 
         if Path(model_id).is_file():
             return self._load_single_file_pipeline(model_id, dtype)
@@ -217,7 +243,10 @@ class PipelineManager:
 
                 generator = None
                 if seed is not None:
-                    generator = torch.Generator(device=self.device).manual_seed(seed + index)
+                    # DirectML does not implement a private-use-device Generator.
+                    # diffusers accepts a CPU generator while tensors run on DML.
+                    generator_device = "cpu" if self.device_backend == "directml" else self.device
+                    generator = torch.Generator(device=generator_device).manual_seed(seed + index)
 
                 def report_step(
                     _pipeline: DiffusionPipeline,
