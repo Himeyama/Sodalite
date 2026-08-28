@@ -38,9 +38,12 @@ def _get_directml_device() -> torch.device | None:
 
 
 def _select_device() -> tuple[torch.device | str, str]:
-    """Select CUDA first, then DirectML, and finally CPU."""
+    """Select a native CUDA/HIP device first, then DirectML, and finally CPU."""
     if torch.cuda.is_available():
-        return "cuda", "cuda"
+        # PyTorch deliberately exposes ROCm devices through its torch.cuda API.
+        # torch.version.hip is the supported way to distinguish that build from CUDA.
+        backend = "rocm" if torch.version.hip is not None else "cuda"
+        return "cuda", backend
 
     if directml_device := _get_directml_device():
         return directml_device, "directml"
@@ -88,7 +91,7 @@ class PipelineManager:
 
         del old_pipeline
         gc.collect()
-        if self.device_backend == "cuda":
+        if self.device_backend in {"cuda", "rocm"}:
             torch.cuda.empty_cache()
 
     def _require_pipeline(self) -> DiffusionPipeline:
@@ -97,7 +100,11 @@ class PipelineManager:
         return self._pipeline
 
     def _load_pipeline(self, model_id: str) -> DiffusionPipeline:
-        dtype = torch.float16 if self.device_backend in {"cuda", "directml"} else torch.float32
+        dtype = (
+            torch.float16
+            if self.device_backend in {"cuda", "rocm", "directml"}
+            else torch.float32
+        )
 
         if Path(model_id).is_file():
             return self._load_single_file_pipeline(model_id, dtype)

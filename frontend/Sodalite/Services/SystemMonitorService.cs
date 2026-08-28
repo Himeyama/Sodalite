@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using Microsoft.Win32;
 
 namespace Sodalite.Services;
 
@@ -14,13 +15,20 @@ readonly record struct SystemStats(
     double? VramTotalGiB);
 
 /// <summary>
-/// CPU/メモリは Win32 API から直接取得する。GPU/VRAM は NVIDIA 専用の nvidia-smi を都度起動して
-/// 取得し、コマンドが存在しない・失敗する環境では該当値を null にして呼び出し側で非表示にする。
+/// CPU/メモリは Win32 API から直接取得する。NVIDIA の GPU/VRAM は nvidia-smi、Radeon は
+/// Windows GPU パフォーマンスカウンターとアダプターレジストリから取得する。
 /// </summary>
 sealed class SystemMonitorService
 {
+    const double BytesPerGiB = 1024.0 * 1024.0 * 1024.0;
+
     (ulong Idle, ulong Kernel, ulong User)? _lastCpuTimes;
     bool _nvidiaSmiUnavailable;
+    bool _radeonDetectionAttempted;
+    double? _radeonVramTotalGiB;
+    List<PerformanceCounter>? _gpuEngineCounters;
+    List<PerformanceCounter>? _gpuMemoryCounters;
+    DateTime _lastGpuCounterRefreshUtc;
 
     public async Task<SystemStats> GetStatsAsync(CancellationToken ct = default)
     {
@@ -65,7 +73,6 @@ sealed class SystemMonitorService
             return (0, 0);
         }
 
-        const double BytesPerGiB = 1024.0 * 1024.0 * 1024.0;
         double totalGiB = status.ullTotalPhys / BytesPerGiB;
         double usedGiB = (status.ullTotalPhys - status.ullAvailPhys) / BytesPerGiB;
         return (usedGiB, totalGiB);
@@ -75,7 +82,7 @@ sealed class SystemMonitorService
     {
         if (_nvidiaSmiUnavailable)
         {
-            return (null, null, null);
+            return GetRadeonGpuStats();
         }
 
         ProcessStartInfo startInfo = new()
@@ -99,7 +106,7 @@ sealed class SystemMonitorService
             if (process.ExitCode != 0)
             {
                 _nvidiaSmiUnavailable = true;
-                return (null, null, null);
+                return GetRadeonGpuStats();
             }
 
             // 複数 GPU 構成では先頭行(1台目)のみを表示対象とする。
@@ -108,7 +115,7 @@ sealed class SystemMonitorService
             if (parts.Length != 3)
             {
                 _nvidiaSmiUnavailable = true;
-                return (null, null, null);
+                return GetRadeonGpuStats();
             }
 
             double gpuPercent = double.Parse(parts[0], CultureInfo.InvariantCulture);
@@ -122,7 +129,172 @@ sealed class SystemMonitorService
         {
             // nvidia-smi が存在しない(非 NVIDIA 環境)場合はここに来る。以後は再試行しない。
             _nvidiaSmiUnavailable = true;
+            return GetRadeonGpuStats();
+        }
+    }
+
+    (double? GpuPercent, double? VramUsedGiB, double? VramTotalGiB) GetRadeonGpuStats()
+    {
+        if (!_radeonDetectionAttempted)
+        {
+            _radeonDetectionAttempted = true;
+            _radeonVramTotalGiB = DetectRadeonVramTotalGiB();
+        }
+
+        if (_radeonVramTotalGiB is null)
+        {
             return (null, null, null);
+        }
+
+        RefreshGpuCountersIfNeeded();
+
+        // Windows exposes one utilization counter per GPU engine. Task Manager's
+        // overall GPU figure likewise follows the busiest engine rather than adding
+        // parallel engines (which could otherwise exceed 100%).
+        double? gpuPercent = ReadMaximumCounter(_gpuEngineCounters);
+        double? dedicatedBytes = ReadMaximumRawValue(_gpuMemoryCounters);
+        double? usedGiB = dedicatedBytes / BytesPerGiB;
+        return (gpuPercent, usedGiB, _radeonVramTotalGiB);
+    }
+
+    void RefreshGpuCountersIfNeeded()
+    {
+        // GPU Engine instances are created per process. The monitor starts before
+        // the Python backend, so periodically enumerate again to include it once
+        // ROCm/DirectML begins submitting work.
+        if (DateTime.UtcNow - _lastGpuCounterRefreshUtc < TimeSpan.FromSeconds(5))
+        {
+            return;
+        }
+
+        _lastGpuCounterRefreshUtc = DateTime.UtcNow;
+        DisposeCounters(_gpuEngineCounters);
+        DisposeCounters(_gpuMemoryCounters);
+        _gpuEngineCounters = CreateCounters("GPU Engine", "Utilization Percentage");
+        _gpuMemoryCounters = CreateCounters("GPU Adapter Memory", "Dedicated Usage");
+    }
+
+    static void DisposeCounters(List<PerformanceCounter>? counters)
+    {
+        if (counters is null)
+        {
+            return;
+        }
+
+        foreach (PerformanceCounter counter in counters)
+        {
+            counter.Dispose();
+        }
+    }
+
+    static List<PerformanceCounter> CreateCounters(string categoryName, string counterName)
+    {
+        try
+        {
+            PerformanceCounterCategory category = new(categoryName);
+            return category.GetInstanceNames()
+                .Select(instance => new PerformanceCounter(categoryName, counterName, instance, true))
+                .ToList();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    static double? ReadMaximumCounter(List<PerformanceCounter>? counters)
+    {
+        if (counters is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        double maximum = 0;
+        bool readAny = false;
+        foreach (PerformanceCounter counter in counters)
+        {
+            try
+            {
+                maximum = Math.Max(maximum, counter.NextValue());
+                readAny = true;
+            }
+            catch (InvalidOperationException)
+            {
+                // GPU engine instances disappear when their owning process exits.
+            }
+        }
+
+        return readAny ? Math.Clamp(maximum, 0, 100) : null;
+    }
+
+    static double? ReadMaximumRawValue(List<PerformanceCounter>? counters)
+    {
+        if (counters is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        long maximum = 0;
+        bool readAny = false;
+        foreach (PerformanceCounter counter in counters)
+        {
+            try
+            {
+                maximum = Math.Max(maximum, counter.RawValue);
+                readAny = true;
+            }
+            catch (InvalidOperationException)
+            {
+                // Adapter instances can disappear after a display-driver reset.
+            }
+        }
+
+        return readAny ? maximum : null;
+    }
+
+    static double? DetectRadeonVramTotalGiB()
+    {
+        try
+        {
+            using RegistryKey? videoKey = Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\Video");
+            if (videoKey is null)
+            {
+                return null;
+            }
+
+            ulong largestBytes = 0;
+            foreach (string adapterKeyName in videoKey.GetSubKeyNames())
+            {
+                using RegistryKey? adapterKey = videoKey.OpenSubKey($@"{adapterKeyName}\0000");
+                string description = string.Join(
+                    " ",
+                    adapterKey?.GetValue("DriverDesc") as string ?? string.Empty,
+                    adapterKey?.GetValue("ProviderName") as string ?? string.Empty);
+                if (!description.Contains("AMD", StringComparison.OrdinalIgnoreCase)
+                    && !description.Contains("Radeon", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                object? memoryValue = adapterKey?.GetValue("HardwareInformation.qwMemorySize");
+                ulong bytes = memoryValue switch
+                {
+                    long value when value > 0 => (ulong)value,
+                    int value when value > 0 => (uint)value,
+                    byte[] value when value.Length >= sizeof(ulong) => BitConverter.ToUInt64(value),
+                    _ => 0,
+                };
+                largestBytes = Math.Max(largestBytes, bytes);
+            }
+
+            return largestBytes == 0 ? null : largestBytes / BytesPerGiB;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException
+                                   or UnauthorizedAccessException
+                                   or IOException)
+        {
+            return null;
         }
     }
 

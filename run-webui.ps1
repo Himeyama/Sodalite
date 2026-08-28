@@ -44,6 +44,11 @@ Write-Host ""
 
 Push-Location $backend
 try {
+    # Avoid multi-minute MIOpen kernel searches on the first generation. These
+    # variables are ignored when the active PyTorch build does not use ROCm.
+    $env:MIOPEN_FIND_MODE = "FAST"
+    $env:MIOPEN_FIND_ENFORCE = "NONE"
+
     uv sync
     $backendArgs = @("run", "sodalite-backend", "--webui", "--port", $Port)
     if ($ModelId) {

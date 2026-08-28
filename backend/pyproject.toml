@@ -32,6 +32,14 @@ cuda = [
 directml = [
     "torch-directml>=0.2.5.dev240914",
 ]
+rocm = [
+    "rocm==7.2.1",
+    "rocm-sdk-core==7.2.1",
+    "rocm-sdk-devel==7.2.1",
+    "rocm-sdk-libraries-custom==7.2.1",
+    "torch==2.9.1+rocm7.2.1",
+    "torchvision==0.24.1+rocm7.2.1",
+]
 
 [project.scripts]
 sodalite-backend = "sodalite_backend.main:run"
@@ -44,11 +52,17 @@ build-backend = "uv_build"
 torch = [
     { index = "pytorch-cpu", extra = "cpu" },
     { index = "pytorch-cu124", extra = "cuda" },
+    { url = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/torch-2.9.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl", extra = "rocm" },
 ]
 torchvision = [
     { index = "pytorch-cpu", extra = "cpu" },
     { index = "pytorch-cu124", extra = "cuda" },
+    { url = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/torchvision-0.24.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl", extra = "rocm" },
 ]
+rocm = { url = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm-7.2.1.tar.gz" }
+rocm-sdk-core = { url = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_core-7.2.1-py3-none-win_amd64.whl" }
+rocm-sdk-devel = { url = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_devel-7.2.1-py3-none-win_amd64.whl" }
+rocm-sdk-libraries-custom = { url = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_libraries_custom-7.2.1-py3-none-win_amd64.whl" }
 
 [tool.uv]
 conflicts = [
@@ -63,6 +77,18 @@ conflicts = [
     [
         { extra = "cuda" },
         { extra = "directml" },
+    ],
+    [
+        { extra = "cpu" },
+        { extra = "rocm" },
+    ],
+    [
+        { extra = "cuda" },
+        { extra = "rocm" },
+    ],
+    [
+        { extra = "directml" },
+        { extra = "rocm" },
     ],
 ]
 

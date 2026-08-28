@@ -216,6 +216,7 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
     static string DetectAccelerator()
     {
         bool hasAmdAdapter = false;
+        bool hasRocmAdapter = false;
 
         try
         {
@@ -244,6 +245,22 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
                     || description.Contains("Radeon", StringComparison.OrdinalIgnoreCase))
                 {
                     hasAmdAdapter = true;
+
+                    // ROCm 7.2.1 for native Windows supports RDNA4 and a small
+                    // selection of RDNA3 products. Other Radeon adapters retain
+                    // the wider DirectML fallback instead of receiving a PyTorch
+                    // build that cannot address their GPU.
+                    string[] supportedRocmAdapters =
+                    [
+                        "Radeon RX 9070",
+                        "Radeon AI PRO R9700",
+                        "Radeon RX 9060 XT",
+                        "Radeon RX 7900 XTX",
+                        "Radeon PRO W7900",
+                        "Radeon RX 7700",
+                    ];
+                    hasRocmAdapter = supportedRocmAdapters.Any(
+                        name => description.Contains(name, StringComparison.OrdinalIgnoreCase));
                 }
             }
         }
@@ -252,7 +269,7 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
             return "cpu";
         }
 
-        return hasAmdAdapter ? "directml" : "cpu";
+        return hasRocmAdapter ? "rocm" : hasAmdAdapter ? "directml" : "cpu";
     }
 
     static void WriteMarker(string lockHash)

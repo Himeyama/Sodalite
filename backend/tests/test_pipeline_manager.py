@@ -19,9 +19,20 @@ def _make_manager() -> PipelineManager:
 def test_select_device_prefers_cuda_over_directml() -> None:
     with (
         patch("sodalite_backend.inference.pipeline_manager.torch.cuda.is_available", return_value=True),
+        patch("sodalite_backend.inference.pipeline_manager.torch.version.hip", None),
         patch("sodalite_backend.inference.pipeline_manager._get_directml_device") as directml,
     ):
         assert _select_device() == ("cuda", "cuda")
+        directml.assert_not_called()
+
+
+def test_select_device_identifies_rocm_build() -> None:
+    with (
+        patch("sodalite_backend.inference.pipeline_manager.torch.cuda.is_available", return_value=True),
+        patch("sodalite_backend.inference.pipeline_manager.torch.version.hip", "7.2.1"),
+        patch("sodalite_backend.inference.pipeline_manager._get_directml_device") as directml,
+    ):
+        assert _select_device() == ("cuda", "rocm")
         directml.assert_not_called()
 
 

@@ -17,5 +17,10 @@ param(
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
+# Avoid multi-minute MIOpen kernel searches on the first generation. These
+# variables are ignored by CUDA, DirectML, and CPU PyTorch builds.
+$env:MIOPEN_FIND_MODE = "FAST"
+$env:MIOPEN_FIND_ENFORCE = "NONE"
+
 uv sync
 uv run sodalite-backend --port $Port

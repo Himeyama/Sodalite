@@ -58,7 +58,7 @@ Sodalite/
 - Windows 10 22H2以降 / Windows 11
 - .NET 9 SDK
 - Python 3.12 と [uv](https://docs.astral.sh/uv/)
-- NVIDIA GPU (CUDA対応) または AMD Radeon GPU (DirectX 12対応)。VRAM 8GB以上推奨。CPUのみでも動作するが低速
+- NVIDIA GPU (CUDA対応) または AMD Radeon GPU。Windows版ROCm 7.2.1対応RadeonではROCmを使用し、それ以外のDirectX 12対応RadeonではDirectMLへフォールバックする。VRAM 8GB以上推奨。CPUのみでも動作するが低速
 
 ### 初回セットアップ
 

@@ -62,6 +62,16 @@ sealed class BackendProcessManager : IAsyncDisposable
         // from_pretrained がそのまま返らなくなる。通常の HTTP ダウンロードに固定する。
         startInfo.Environment["HF_HUB_DISABLE_XET"] = "1";
 
+        if (_environmentSetup.Accelerator == "rocm")
+        {
+            // MIOpen's default cache-miss path benchmarks/compiles many convolution
+            // kernels. On SDXL this can block the first generation for several
+            // minutes and produces a sawtooth GPU-utilization graph. FAST uses an
+            // existing FindDb entry or the immediate fallback instead.
+            startInfo.Environment["MIOPEN_FIND_MODE"] = "FAST";
+            startInfo.Environment["MIOPEN_FIND_ENFORCE"] = "NONE";
+        }
+
         // uv sync (BackendEnvironmentSetup) が作った仮想環境を使う。同じ場所を指さないと
         // uv run が別の .venv を作り直そうとして起動が壊れるため、必ず一致させること
         // (開発構成では null なので設定せず backend\.venv を使う)。
@@ -74,8 +84,8 @@ sealed class BackendProcessManager : IAsyncDisposable
         startInfo.ArgumentList.Add("--project");
         startInfo.ArgumentList.Add(_backendProjectPath);
         // uv run also resolves project dependencies. Keep it on the same accelerator
-        // extra selected by uv sync, otherwise it can replace DirectML's patched
-        // PyTorch with the default PyPI build immediately before backend startup.
+        // extra selected by uv sync, otherwise it can replace the accelerator-specific
+        // PyTorch build with the default PyPI build immediately before backend startup.
         startInfo.ArgumentList.Add("--extra");
         startInfo.ArgumentList.Add(_environmentSetup.Accelerator);
         // EnsureAsync already performed an exact sync. DirectML additionally
