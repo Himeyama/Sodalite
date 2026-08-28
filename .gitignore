@@ -2,7 +2,8 @@
 backend/.venv/
 backend/outputs/
 backend/.ruff_cache/
-backend/.pytest_cache/
+**/.pytest_cache/
+**/.pytest-tmp/
 backend/__pycache__/
 **/__pycache__/
 *.py[oc]
