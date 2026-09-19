@@ -81,7 +81,8 @@ sealed record ChatRequestMessage(
 sealed record ChatResponseMessage(
     string Role,
     string? Content,
-    [property: JsonPropertyName("tool_calls")] List<ChatToolCall>? ToolCalls);
+    [property: JsonPropertyName("tool_calls")] List<ChatToolCall>? ToolCalls,
+    [property: JsonPropertyName("reasoning_content")] string? ReasoningContent = null);
 
 sealed record ChatToolCall(string Id, string Type, ChatToolFunction Function);
 sealed record ChatToolFunction(string Name, string Arguments);

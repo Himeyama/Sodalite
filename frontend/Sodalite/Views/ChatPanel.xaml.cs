@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Globalization;
 using Microsoft.UI.Input;
 using Microsoft.UI.Dispatching;
@@ -16,15 +17,17 @@ public sealed partial class ChatPanel : UserControl, IDisposable
 {
     const string AssistantInstructions = """
         You are an assistant for Stable Diffusion image generation. Before replying or updating prompts, carefully reason about the user's intent, the current positive and negative prompts, visual composition, likely generation results, and any trade-offs. Do not rush to a superficial answer. Reply in the operating system's display language specified below; Markdown is allowed. Keep any explanation useful and concise rather than exposing private step-by-step reasoning.
-        When the user asks to create, revise, add, remove, or otherwise change an image prompt or negative prompt, you MUST call update_image_prompts. Pass the complete replacement values for both prompt and negative_prompt. Prompts must contain only comma-separated standalone keywords, never sentences, prose, noun phrases, or grammar words. Do not use prepositions, conjunctions, articles, or other connector words such as "on", "in", "at", "with", "and", "the", or "a". Do not claim that prompts changed unless you called the tool. After calling the tool, never repeat or display the complete updated prompt or negative prompt in chat; only give a brief Japanese explanation of what you changed. Keep image prompts concise and suitable for Stable Diffusion; English prompt keywords are preferred when useful.
+        When the user asks to create, revise, add, remove, or otherwise change an image prompt or negative prompt, you MUST call update_image_prompts. Pass the complete replacement values for both prompt and negative_prompt. Prompts must contain only comma-separated standalone keywords, never sentences, prose, noun phrases, or grammar words. Do not use prepositions, conjunctions, articles, or other connector words such as "on", "in", "at", "with", "and", "the", or "a". Translate the user's request almost literally into the minimum necessary keywords. Do not add stylistic details, quality tags, composition, lighting, camera terms, negative keywords, or any other embellishment unless the user explicitly asked for them. Do not claim that prompts changed unless you called the tool. After calling the tool, never repeat or display the complete updated prompt or negative prompt in chat; only give a brief Japanese explanation of what you changed. Keep image prompts concise and suitable for Stable Diffusion; English prompt keywords are preferred when useful.
         """;
 
     readonly LlamaApiClient _client = new();
     readonly List<ChatRequestMessage> _history = [];
+    readonly List<ChatLogEntry> _chatLog = [];
     readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _availabilityTimer;
     Func<(string Prompt, string NegativePrompt)>? _getPrompts;
     bool _isCheckingAvailability;
     bool _isAvailable;
+    bool _isChatLogVisible;
     bool _isSending;
 
     public event EventHandler<bool>? AvailabilityChanged;
@@ -136,6 +139,8 @@ public sealed partial class ChatPanel : UserControl, IDisposable
             MessageTextBox.Text = "";
             AddUserMessage(content);
             _history.Add(new ChatRequestMessage("user", content));
+            _chatLog.Add(new ChatLogEntry("user", content));
+            RefreshChatLog();
             await GetAssistantResponseAsync(model);
         }
         catch (Exception ex)
@@ -160,6 +165,12 @@ public sealed partial class ChatPanel : UserControl, IDisposable
         {
             ChatResponseMessage response = await _client.CompleteAsync(model, BuildRequestMessages(), CancellationToken.None);
             _history.Add(new ChatRequestMessage("assistant", response.Content, response.ToolCalls));
+            // ツール応答には更新済みプロンプトが混じり得るため、本文・推論ともログには残さない。
+            if (response.ToolCalls is not { Count: > 0 })
+            {
+                _chatLog.Add(new ChatLogEntry("assistant", response.Content, response.ReasoningContent));
+            }
+            RefreshChatLog();
 
             // ツール呼び出しを伴う途中応答には、モデルがプロンプト全文を含める場合がある。
             // 入力欄が正本なので、ここでは表示せずツール結果後の短い説明だけを見せる。
@@ -218,7 +229,34 @@ public sealed partial class ChatPanel : UserControl, IDisposable
     void ResetButton_Click(object sender, RoutedEventArgs e)
     {
         _history.Clear();
+        _chatLog.Clear();
         MessagesPanel.Children.Clear();
+        RefreshChatLog();
+    }
+
+    /// <summary>右クリック時だけ入力欄の下に会話ログを展開する隠し操作。</summary>
+    void ChatPanel_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        _isChatLogVisible = !_isChatLogVisible;
+        ChatLogScrollViewer.Visibility = _isChatLogVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (_isChatLogVisible)
+        {
+            RefreshChatLog();
+        }
+    }
+
+    void RefreshChatLog()
+    {
+        if (!_isChatLogVisible)
+        {
+            return;
+        }
+
+        ChatLogTextBlock.Text = JsonSerializer.Serialize(_chatLog, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        });
     }
 
     void AddUserMessage(string content)
@@ -310,3 +348,9 @@ public sealed partial class ChatPanel : UserControl, IDisposable
 }
 
 public sealed record ChatPromptUpdate(string Prompt, string NegativePrompt);
+
+/// <summary>右クリックで開くデバッグ用ログの1レコード。reasoning は llama.cpp が返した場合のみ含める。</summary>
+sealed record ChatLogEntry(
+    [property: JsonPropertyName("role")] string Role,
+    [property: JsonPropertyName("content")] string? Content,
+    [property: JsonPropertyName("reasoning")] string? Reasoning = null);
