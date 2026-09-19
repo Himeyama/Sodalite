@@ -34,6 +34,13 @@ class TextToImageRequest(BaseModel):
     loras: list[LoraSpec] = Field(default_factory=list)
 
 
+class ImageToImageRequest(TextToImageRequest):
+    """A text prompt plus a base64-encoded source image for img2img generation."""
+
+    initial_image: str = Field(min_length=4)
+    strength: float = Field(default=0.4, ge=0.0, le=1.0)
+
+
 class GalleryLoraInfo(BaseModel):
     model_id: str
     weight: float

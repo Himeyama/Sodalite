@@ -154,7 +154,7 @@
     <value>プロンプト</value>
   </data>
   <data name="Generation_PromptTextBox.PlaceholderText" xml:space="preserve">
-    <value>サングラスをかけた猫</value>
+    <value>1girl, classroom, gym uniform</value>
   </data>
   <data name="Generation_NegativePromptLabel.Text" xml:space="preserve">
     <value>ネガティブプロンプト</value>
@@ -162,11 +162,38 @@
   <data name="Generation_NegativePromptTextBox.PlaceholderText" xml:space="preserve">
     <value>low quality, blurry</value>
   </data>
+  <data name="Generation_SourceImageLabel.Text" xml:space="preserve">
+    <value>元画像（選択時は image-to-image）</value>
+  </data>
+  <data name="Generation_SelectImageButton.Content" xml:space="preserve">
+    <value>画像を選択</value>
+  </data>
+  <data name="Generation_ClearImageButton.Content" xml:space="preserve">
+    <value>解除</value>
+  </data>
+  <data name="Generation_NoImageSelected.Text" xml:space="preserve">
+    <value>画像は選択されていません</value>
+  </data>
+  <data name="Generation_StrengthLabel.Text" xml:space="preserve">
+    <value>変化の強さ</value>
+  </data>
+  <data name="Generation_AdvancedOptions.Header" xml:space="preserve">
+    <value>詳細オプション</value>
+  </data>
+  <data name="Generation_StrengthDescription.Text" xml:space="preserve">
+    <value>高いほど元画像から大きく変化します。</value>
+  </data>
   <data name="Generation_SamplerLabel.Text" xml:space="preserve">
     <value>サンプラー</value>
   </data>
+  <data name="Generation_SamplerDescription.Text" xml:space="preserve">
+    <value>ノイズを画像に変換する計算方法です。</value>
+  </data>
   <data name="Generation_SeedLabel.Text" xml:space="preserve">
     <value>シード値(空欄でランダム)</value>
+  </data>
+  <data name="Generation_SeedDescription.Text" xml:space="preserve">
+    <value>同じ条件とシードで、結果を再現しやすくなります。</value>
   </data>
   <data name="Generation_SeedTextBox.PlaceholderText" xml:space="preserve">
     <value>ランダム</value>
@@ -174,8 +201,14 @@
   <data name="Generation_StepsLabel.Text" xml:space="preserve">
     <value>ステップ数</value>
   </data>
+  <data name="Generation_StepsDescription.Text" xml:space="preserve">
+    <value>多いほど時間はかかりますが、細部が整うことがあります。</value>
+  </data>
   <data name="Generation_CfgScaleLabel.Text" xml:space="preserve">
     <value>CFGスケール</value>
+  </data>
+  <data name="Generation_CfgScaleDescription.Text" xml:space="preserve">
+    <value>高いほどプロンプトへの忠実さが増します。</value>
   </data>
   <data name="Generation_WidthLabel.Text" xml:space="preserve">
     <value>幅</value>

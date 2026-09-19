@@ -28,6 +28,10 @@
             <label class="field-label">プロンプト</label>
             <textarea id="prompt" rows="4"></textarea>
 
+            <label class="field-label" for="source-image">元画像 (選択時は image-to-image)</label>
+            <input id="source-image" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" />
+            <span id="source-image-name" class="value">画像は選択されていません</span>
+
             <details id="advanced-section" class="lora-section">
               <summary>詳細</summary>
 
@@ -50,6 +54,9 @@
 
               <label class="field-label">CFG スケール <span id="cfg-out" class="value">7.0</span></label>
               <input type="range" id="cfg" min="0" max="30" step="0.5" value="7" />
+
+              <label class="field-label">変化の強さ <span id="strength-out" class="value">0.40</span></label>
+              <input type="range" id="strength" min="0" max="1" step="0.05" value="0.4" disabled />
 
               <div class="row3">
                 <div>

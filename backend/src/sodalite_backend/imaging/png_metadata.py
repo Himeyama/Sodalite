@@ -35,6 +35,8 @@ def format_parameters_text(parameters: Mapping[str, object]) -> str:
         settings.append(f"Sampler: {sampler}")
     if (cfg_scale := parameters.get("cfg_scale")) is not None:
         settings.append(f"CFG scale: {cfg_scale}")
+    if (strength := parameters.get("strength")) is not None:
+        settings.append(f"Denoising strength: {strength}")
     if (seed := parameters.get("seed")) is not None:
         settings.append(f"Seed: {seed}")
     if (width := parameters.get("width")) is not None and (

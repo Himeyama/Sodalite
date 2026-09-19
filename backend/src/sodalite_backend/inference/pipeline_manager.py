@@ -7,6 +7,7 @@ from pathlib import Path
 
 import torch
 from diffusers import (
+    AutoPipelineForImage2Image,
     AutoPipelineForText2Image,
     DiffusionPipeline,
     StableDiffusionPipeline,
@@ -65,6 +66,7 @@ class PipelineManager:
         self.device, self.device_backend = _select_device()
         self.model_id: str | None = None
         self._pipeline: DiffusionPipeline | None = None
+        self._image_to_image_pipeline: DiffusionPipeline | None = None
 
     @property
     def is_ready(self) -> bool:
@@ -73,6 +75,7 @@ class PipelineManager:
     def load_initial_model(self, model_id: str) -> None:
         """Load the first model. Intended to run once, before any `load_model` call."""
         self._pipeline = self._load_pipeline(model_id)
+        self._image_to_image_pipeline = None
         self.model_id = model_id
 
     def load_model(self, model_id: str) -> None:
@@ -87,6 +90,7 @@ class PipelineManager:
 
         old_pipeline = self._pipeline
         self._pipeline = new_pipeline
+        self._image_to_image_pipeline = None
         self.model_id = model_id
 
         del old_pipeline
@@ -123,8 +127,8 @@ class PipelineManager:
                 model_path, torch_dtype=dtype, safety_checker=None
             ).to(self.device)
 
-    def set_sampler(self, sampler: Sampler) -> None:
-        pipeline = self._require_pipeline()
+    def set_sampler(self, sampler: Sampler, pipeline: DiffusionPipeline | None = None) -> None:
+        pipeline = pipeline or self._require_pipeline()
         scheduler_cls = SAMPLER_CLASSES[sampler]
         pipeline.scheduler = scheduler_cls.from_config(pipeline.scheduler.config)
 
@@ -210,6 +214,18 @@ class PipelineManager:
         """Remove any LoRA weights so they don't leak into later generations or model switches."""
         self._require_pipeline().unload_lora_weights()
 
+    def _get_image_to_image_pipeline(self) -> DiffusionPipeline:
+        """Adapt the loaded model without a second checkpoint load or VRAM copy."""
+        if self._image_to_image_pipeline is None:
+            self._image_to_image_pipeline = AutoPipelineForImage2Image.from_pipe(
+                self._require_pipeline()
+            )
+            if self.device_backend == "rocm":
+                # Reduces SDXL decoder peak VRAM on Radeon without moving the
+                # model or tensors off the HIP device.
+                self._image_to_image_pipeline.enable_vae_slicing()
+        return self._image_to_image_pipeline
+
     def generate(
         self,
         prompt: str,
@@ -222,6 +238,8 @@ class PipelineManager:
         seed: int | None,
         batch_size: int = 1,
         loras: list[LoraSpec] | None = None,
+        initial_image: Image.Image | None = None,
+        strength: float = 0.4,
         should_stop: Callable[[], bool] | None = None,
         on_step: Callable[[int, int], None] | None = None,
     ) -> Iterator[Image.Image]:
@@ -238,8 +256,10 @@ class PipelineManager:
 
         Raises `ModelNotReadyError` if no model has finished loading yet.
         """
-        pipeline = self._require_pipeline()
-        self.set_sampler(sampler)
+        pipeline = (
+            self._get_image_to_image_pipeline() if initial_image is not None else self._require_pipeline()
+        )
+        self.set_sampler(sampler, pipeline)
 
         if loras:
             self._apply_loras(loras)
@@ -265,7 +285,7 @@ class PipelineManager:
                         on_step(step_index + 1, steps)
                     return callback_kwargs
 
-                result = pipeline(
+                arguments: dict[str, object] = dict(
                     prompt=prompt,
                     negative_prompt=negative_prompt or None,
                     num_inference_steps=steps,
@@ -275,6 +295,10 @@ class PipelineManager:
                     generator=generator,
                     callback_on_step_end=report_step if on_step is not None else None,
                 )
+                if initial_image is not None:
+                    arguments["image"] = initial_image
+                    arguments["strength"] = strength
+                result = pipeline(**arguments)
                 yield result.images[0]
         finally:
             if loras:

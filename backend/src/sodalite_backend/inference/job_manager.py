@@ -7,13 +7,23 @@ original POST, which lets it show each image as soon as it's saved and offer
 a cancel button that takes effect between images.
 """
 
+from base64 import b64decode
+from io import BytesIO
 import threading
 import uuid
 from typing import Protocol
 
+from PIL import Image
+
 from sodalite_backend.imaging.png_metadata import save_with_metadata
 from sodalite_backend.imaging.storage import new_image_path
-from sodalite_backend.schemas.generation import GenerationJob, LoraSpec, Sampler, TextToImageRequest
+from sodalite_backend.schemas.generation import (
+    GenerationJob,
+    ImageToImageRequest,
+    LoraSpec,
+    Sampler,
+    TextToImageRequest,
+)
 
 
 class SupportsGenerate(Protocol):
@@ -29,6 +39,8 @@ class SupportsGenerate(Protocol):
         seed: int | None,
         batch_size: int,
         loras: list[LoraSpec] | None,
+        initial_image: Image.Image | None,
+        strength: float,
         should_stop,
         on_step,
     ): ...
@@ -50,6 +62,12 @@ class JobManager:
         self._lock = threading.Lock()
 
     def start_text_to_image(self, request: TextToImageRequest) -> GenerationJob:
+        return self._start_job(request)
+
+    def start_image_to_image(self, request: ImageToImageRequest) -> GenerationJob:
+        return self._start_job(request)
+
+    def _start_job(self, request: TextToImageRequest | ImageToImageRequest) -> GenerationJob:
         job_id = uuid.uuid4().hex
 
         job = GenerationJob(
@@ -88,7 +106,10 @@ class JobManager:
             return job
 
     def _run_job(
-        self, job_id: str, request: TextToImageRequest, cancel_event: threading.Event
+        self,
+        job_id: str,
+        request: TextToImageRequest | ImageToImageRequest,
+        cancel_event: threading.Event,
     ) -> None:
         self._update_job(job_id, status="running")
 
@@ -96,6 +117,13 @@ class JobManager:
             self._update_job(job_id, current_step=step_index, total_steps=total_steps)
 
         try:
+            initial_image = (
+                _decode_initial_image(request.initial_image).resize(
+                    (request.width, request.height), Image.Resampling.LANCZOS
+                )
+                if isinstance(request, ImageToImageRequest)
+                else None
+            )
             images = self._pipeline_manager.generate(
                 prompt=request.prompt,
                 negative_prompt=request.negative_prompt,
@@ -107,11 +135,14 @@ class JobManager:
                 seed=request.seed,
                 batch_size=request.batch_size,
                 loras=request.loras,
+                initial_image=initial_image,
+                strength=request.strength if isinstance(request, ImageToImageRequest) else 0.4,
                 should_stop=cancel_event.is_set,
                 on_step=report_step,
             )
 
-            metadata = request.model_dump()
+            # Do not embed the (potentially multi-megabyte) source image in every output PNG.
+            metadata = request.model_dump(exclude={"initial_image"})
             images_completed = 0
             for image in images:
                 image_path = new_image_path()
@@ -142,3 +173,13 @@ class JobManager:
             if current is None:
                 return
             self._jobs[job_id] = current.model_copy(update=changes)
+
+
+def _decode_initial_image(encoded_image: str) -> Image.Image:
+    """Decode a client-provided base64 image and detach it from the input stream."""
+    try:
+        image_bytes = b64decode(encoded_image, validate=True)
+        with Image.open(BytesIO(image_bytes)) as image:
+            return image.convert("RGB").copy()
+    except Exception as exc:
+        raise ValueError("The selected image is not a valid image file.") from exc

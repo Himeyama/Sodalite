@@ -33,30 +33,58 @@
                 <TextBox x:Name="NegativePromptTextBox" x:Uid="Generation_NegativePromptTextBox" AcceptsReturn="True" Height="70"
                          TextWrapping="Wrap" />
 
-                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                    <StackPanel Grid.Column="0" Spacing="4">
-                        <TextBlock x:Uid="Generation_SamplerLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                        <ComboBox x:Name="SamplerComboBox" HorizontalAlignment="Stretch" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="4">
-                        <TextBlock x:Uid="Generation_SeedLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                        <TextBox x:Name="SeedTextBox" x:Uid="Generation_SeedTextBox" />
-                    </StackPanel>
-                </Grid>
-
                 <StackPanel Spacing="4">
-                    <TextBlock x:Uid="Generation_StepsLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                    <Slider x:Name="StepsSlider" Minimum="1" Maximum="150" Value="20"
-                            TickFrequency="10" ValueChanged="StepsSlider_ValueChanged" />
-                    <TextBlock x:Name="StepsValueTextBlock" Text="20" Opacity="0.7" />
+                    <TextBlock x:Uid="Generation_SourceImageLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="SelectImageButton" x:Uid="Generation_SelectImageButton"
+                                Click="SelectImageButton_Click" />
+                        <Button x:Name="ClearImageButton" x:Uid="Generation_ClearImageButton"
+                                Click="ClearImageButton_Click" IsEnabled="False" />
+                    </StackPanel>
+                    <TextBlock x:Name="SelectedImageTextBlock" x:Uid="Generation_NoImageSelected" Opacity="0.7"
+                               TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
-                <StackPanel Spacing="4">
-                    <TextBlock x:Uid="Generation_CfgScaleLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                    <Slider x:Name="CfgScaleSlider" Minimum="0" Maximum="30" Value="7"
-                            StepFrequency="0.5" TickFrequency="5" ValueChanged="CfgScaleSlider_ValueChanged" />
-                    <TextBlock x:Name="CfgScaleValueTextBlock" Text="7.0" Opacity="0.7" />
-                </StackPanel>
+                <Expander x:Uid="Generation_AdvancedOptions">
+                    <StackPanel Spacing="12">
+                        <StackPanel Spacing="4">
+                            <TextBlock x:Uid="Generation_StrengthLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                            <TextBlock x:Uid="Generation_StrengthDescription" Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.65" TextWrapping="Wrap" />
+                            <Slider x:Name="StrengthSlider" Minimum="0" Maximum="1" Value="0.4" StepFrequency="0.05"
+                                    ValueChanged="StrengthSlider_ValueChanged" IsEnabled="False" />
+                            <TextBlock x:Name="StrengthValueTextBlock" Text="0.40" Opacity="0.7" />
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock x:Uid="Generation_SamplerLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                <TextBlock x:Uid="Generation_SamplerDescription" Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.65" TextWrapping="Wrap" />
+                                <ComboBox x:Name="SamplerComboBox" HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="4">
+                                <TextBlock x:Uid="Generation_SeedLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                                <TextBlock x:Uid="Generation_SeedDescription" Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.65" TextWrapping="Wrap" />
+                                <TextBox x:Name="SeedTextBox" x:Uid="Generation_SeedTextBox" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock x:Uid="Generation_StepsLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                            <TextBlock x:Uid="Generation_StepsDescription" Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.65" TextWrapping="Wrap" />
+                            <Slider x:Name="StepsSlider" Minimum="1" Maximum="150" Value="20"
+                                    TickFrequency="10" ValueChanged="StepsSlider_ValueChanged" />
+                            <TextBlock x:Name="StepsValueTextBlock" Text="20" Opacity="0.7" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock x:Uid="Generation_CfgScaleLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                            <TextBlock x:Uid="Generation_CfgScaleDescription" Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.65" TextWrapping="Wrap" />
+                            <Slider x:Name="CfgScaleSlider" Minimum="0" Maximum="30" Value="7"
+                                    StepFrequency="0.5" TickFrequency="5" ValueChanged="CfgScaleSlider_ValueChanged" />
+                            <TextBlock x:Name="CfgScaleValueTextBlock" Text="7.0" Opacity="0.7" />
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
 
                 <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
                     <StackPanel Grid.Column="0" Spacing="4">

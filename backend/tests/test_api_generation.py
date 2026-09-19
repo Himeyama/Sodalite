@@ -200,3 +200,31 @@ def test_text_to_image_forwards_loras(
     _, kwargs = mock_pipeline_manager.generate.call_args
     assert [lora.model_id for lora in kwargs["loras"]] == ["some/lora"]
     assert [lora.weight for lora in kwargs["loras"]] == [0.8]
+
+
+def test_image_to_image_forwards_decoded_source_and_strength(
+    client: TestClient, mock_pipeline_manager, wait_for_job_done
+) -> None:
+    import base64
+    from io import BytesIO
+
+    from PIL import Image
+
+    buffer = BytesIO()
+    Image.new("RGBA", (12, 10), "red").save(buffer, format="PNG")
+    response = client.post(
+        "/api/v1/generations/image-to-image",
+        json={
+            "prompt": "a cat",
+            "steps": 4,
+            "strength": 0.7,
+            "initial_image": base64.b64encode(buffer.getvalue()).decode(),
+        },
+    )
+
+    assert response.status_code == 200
+    assert wait_for_job_done(client, response.json()["job_id"])["status"] == "completed"
+    _, kwargs = mock_pipeline_manager.generate.call_args
+    assert kwargs["initial_image"].mode == "RGB"
+    assert kwargs["initial_image"].size == (1024, 1024)
+    assert kwargs["strength"] == 0.7

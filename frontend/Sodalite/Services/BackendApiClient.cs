@@ -44,6 +44,31 @@ sealed class BackendApiClient(int port) : IDisposable
             ?? throw new InvalidOperationException("Empty response from backend."));
     }
 
+    public async Task<GenerationResult> StartImageToImageAsync(GenerationRequest request, CancellationToken ct)
+    {
+        if (request.InitialImage is not string initialImage)
+        {
+            throw new InvalidOperationException("An initial image is required for image-to-image generation.");
+        }
+
+        List<LoraBody> loras = request.Loras?
+            .Select(lora => new LoraBody(lora.ModelId, lora.Weight))
+            .ToList() ?? [];
+        ImageToImageBody body = new(
+            request.Prompt, request.NegativePrompt, request.Steps, request.CfgScale,
+            request.Width, request.Height, request.BatchSize, request.Sampler, request.Seed,
+            loras, initialImage, request.Strength);
+
+        HttpResponseMessage response = await _http
+            .PostAsJsonAsync("/api/v1/generations/image-to-image", body, ct)
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        return ToGenerationResult(await response.Content
+            .ReadFromJsonAsync<GenerationJobDto>(ct)
+            .ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Empty response from backend."));
+    }
+
     public async Task<GenerationResult> GetGenerationJobAsync(string jobId, CancellationToken ct)
     {
         GenerationJobDto dto = await _http
@@ -192,6 +217,20 @@ sealed class BackendApiClient(int port) : IDisposable
         List<LoraBody> Loras);
 
     sealed record LoraBody([property: JsonPropertyName("model_id")] string ModelId, double Weight);
+
+    sealed record ImageToImageBody(
+        string Prompt,
+        [property: JsonPropertyName("negative_prompt")] string NegativePrompt,
+        int Steps,
+        [property: JsonPropertyName("cfg_scale")] double CfgScale,
+        int Width,
+        int Height,
+        [property: JsonPropertyName("batch_size")] int BatchSize,
+        string Sampler,
+        long? Seed,
+        List<LoraBody> Loras,
+        [property: JsonPropertyName("initial_image")] string InitialImage,
+        double Strength);
 
     sealed record GenerationJobDto(
         [property: JsonPropertyName("job_id")] string JobId,

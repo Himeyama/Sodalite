@@ -9,7 +9,11 @@ next image in the batch starts.
 
 from fastapi import APIRouter, HTTPException, Request
 
-from sodalite_backend.schemas.generation import GenerationJob, TextToImageRequest
+from sodalite_backend.schemas.generation import (
+    GenerationJob,
+    ImageToImageRequest,
+    TextToImageRequest,
+)
 
 router = APIRouter(prefix="/generations", tags=["generations"])
 
@@ -18,6 +22,13 @@ router = APIRouter(prefix="/generations", tags=["generations"])
 def create_text_to_image(request: Request, body: TextToImageRequest) -> GenerationJob:
     job_manager = request.app.state.job_manager
     return job_manager.start_text_to_image(body)
+
+
+@router.post("/image-to-image", response_model=GenerationJob)
+def create_image_to_image(request: Request, body: ImageToImageRequest) -> GenerationJob:
+    """Start a generation that uses the supplied image as its initial latent."""
+    job_manager = request.app.state.job_manager
+    return job_manager.start_image_to_image(body)
 
 
 @router.get("/{job_id}", response_model=GenerationJob)

@@ -162,11 +162,38 @@
   <data name="Generation_NegativePromptTextBox.PlaceholderText" xml:space="preserve">
     <value>low quality, blurry</value>
   </data>
+  <data name="Generation_SourceImageLabel.Text" xml:space="preserve">
+    <value>Source image (enables image-to-image)</value>
+  </data>
+  <data name="Generation_SelectImageButton.Content" xml:space="preserve">
+    <value>Select image</value>
+  </data>
+  <data name="Generation_ClearImageButton.Content" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Generation_NoImageSelected.Text" xml:space="preserve">
+    <value>No image selected</value>
+  </data>
+  <data name="Generation_StrengthLabel.Text" xml:space="preserve">
+    <value>Transformation strength</value>
+  </data>
+  <data name="Generation_AdvancedOptions.Header" xml:space="preserve">
+    <value>Advanced options</value>
+  </data>
+  <data name="Generation_StrengthDescription.Text" xml:space="preserve">
+    <value>Higher values make larger changes from the source image.</value>
+  </data>
   <data name="Generation_SamplerLabel.Text" xml:space="preserve">
     <value>Sampler</value>
   </data>
+  <data name="Generation_SamplerDescription.Text" xml:space="preserve">
+    <value>The method used to turn noise into an image.</value>
+  </data>
   <data name="Generation_SeedLabel.Text" xml:space="preserve">
     <value>Seed (empty = random)</value>
+  </data>
+  <data name="Generation_SeedDescription.Text" xml:space="preserve">
+    <value>Use the same seed and settings to help reproduce a result.</value>
   </data>
   <data name="Generation_SeedTextBox.PlaceholderText" xml:space="preserve">
     <value>random</value>
@@ -174,8 +201,14 @@
   <data name="Generation_StepsLabel.Text" xml:space="preserve">
     <value>Steps</value>
   </data>
+  <data name="Generation_StepsDescription.Text" xml:space="preserve">
+    <value>More steps take longer and can refine detail.</value>
+  </data>
   <data name="Generation_CfgScaleLabel.Text" xml:space="preserve">
     <value>CFG scale</value>
+  </data>
+  <data name="Generation_CfgScaleDescription.Text" xml:space="preserve">
+    <value>Higher values follow the prompt more closely.</value>
   </data>
   <data name="Generation_WidthLabel.Text" xml:space="preserve">
     <value>Width</value>

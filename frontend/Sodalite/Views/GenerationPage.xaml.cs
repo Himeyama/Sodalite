@@ -179,6 +179,8 @@ public sealed partial class GenerationPage : Page
                 GenerateButton.Visibility = _viewModel.IsGenerating ? Visibility.Collapsed : Visibility.Visible;
                 CancelButton.Visibility = _viewModel.IsGenerating ? Visibility.Visible : Visibility.Collapsed;
                 CancelButton.IsEnabled = _viewModel.IsGenerating;
+                SelectImageButton.IsEnabled = !_viewModel.IsGenerating;
+                ClearImageButton.IsEnabled = !_viewModel.IsGenerating && _viewModel.InitialImage is not null;
                 UpdateResultAreaVisibility();
                 break;
             case nameof(GenerationViewModel.Samplers):
@@ -206,6 +208,7 @@ public sealed partial class GenerationPage : Page
         _viewModel.BatchSize = (int)BatchSizeNumberBox.Value;
         _viewModel.Sampler = SamplerComboBox.SelectedItem as string ?? _viewModel.Sampler;
         _viewModel.SeedText = SeedTextBox.Text;
+        _viewModel.Strength = StrengthSlider.Value;
 
         _skeletonAspectRatio = (double)_viewModel.Width / _viewModel.Height;
         UpdateSkeletonScreenSize(SkeletonScreenGrid.ActualSize.X, SkeletonScreenGrid.ActualSize.Y);
@@ -233,6 +236,53 @@ public sealed partial class GenerationPage : Page
         {
             CfgScaleValueTextBlock.Text = e.NewValue.ToString("F1");
         }
+    }
+
+    void StrengthSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (StrengthValueTextBlock is not null)
+        {
+            StrengthValueTextBlock.Text = e.NewValue.ToString("F2");
+        }
+    }
+
+    async void SelectImageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (OwnerWindow is not Window ownerWindow)
+        {
+            return;
+        }
+
+        FileOpenPicker picker = new();
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(ownerWindow));
+        picker.SuggestedStartLocation = PickerLocationId.PicturesLibrary;
+        picker.FileTypeFilter.Add(".png");
+        picker.FileTypeFilter.Add(".jpg");
+        picker.FileTypeFilter.Add(".jpeg");
+        picker.FileTypeFilter.Add(".webp");
+        picker.FileTypeFilter.Add(".bmp");
+
+        StorageFile? file = await picker.PickSingleFileAsync();
+        if (file is null)
+        {
+            return;
+        }
+
+        IBuffer imageBuffer = await FileIO.ReadBufferAsync(file);
+        _viewModel.InitialImage = Convert.ToBase64String(imageBuffer.ToArray());
+        SelectedImageTextBlock.Text = file.Name;
+        ClearImageButton.IsEnabled = true;
+        StrengthSlider.IsEnabled = true;
+        StepsSlider.Value = 40;
+    }
+
+    void ClearImageButton_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.InitialImage = null;
+        SelectedImageTextBlock.Text = ResourceLoader.GetString("Generation_NoImageSelected/Text");
+        ClearImageButton.IsEnabled = false;
+        StrengthSlider.IsEnabled = false;
+        StepsSlider.Value = 20;
     }
 
     void ResultImageFlyout_Opening(object? sender, object e)

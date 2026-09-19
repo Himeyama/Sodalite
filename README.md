@@ -6,6 +6,15 @@ Stable Diffusion 画像生成デスクトップアプリ。一から独自実装
 
 <img width="600" alt="image" src="https://github.com/user-attachments/assets/bb0b7d58-f920-4f02-a92f-6ea247ced829" />
 
+## 主な機能
+
+- **text-to-image**: プロンプトから新しい画像を生成
+- **image-to-image**: 元画像を選択してプロンプトに沿って画像を変換。変化の強さで元画像をどの程度維持するか調整可能
+- **生成設定**: サンプラー、シード、ステップ数、CFG スケール、解像度、バッチ枚数を指定
+- **LoRA**: 複数の LoRA を選択し、各ウェイトを指定して適用
+- **生成履歴**: 出力 PNG のメタデータを保持し、ギャラリーで閲覧・パラメータ再利用・保存・コピーが可能
+- **GPU 自動選択**: CUDA、Windows 版 ROCm (対応 Radeon)、DirectML、CPU の順で利用可能な実行環境を選択
+
 - **フロントエンド**: WinUI3 (.NET 9 / Windows App SDK)
 - **バックエンド**: Python 3.12 / FastAPI / diffusers (uv管理)
 - **通信方式**: フロントエンドがバックエンドをローカルサブプロセスとして起動し、HTTP経由で通信する
@@ -112,6 +121,16 @@ LAN用 `http://<このPCのIP>:8188/`) が表示される。他デバイスの�
 
 ## 開発
 
+### バージョニング
+
+バージョンは `MAJOR.MINOR.PATCH` 形式で管理する。メジャーバージョンはユーザーが明示的に指定した場合のみ上げ、機能追加ではマイナーバージョンを、バグ修正のみではパッチバージョンを上げる。更新時は手動編集せず、ルートで次を実行する。
+
+```powershell
+./bump-version.ps1 -Version x.y.z
+```
+
+このスクリプトはすべてのバージョン定義と `backend/uv.lock` を一括更新する。
+
 - Pythonバックエンドのコーディング規約: [`skills/python-coding/SKILL.md`](skills/python-coding/SKILL.md)
 - WinUI3フロントエンドのコーディング規約: [`skills/winui3-app/SKILL.md`](skills/winui3-app/SKILL.md)
 
@@ -169,6 +188,7 @@ make installer
 | GET | `/api/v1/health` | 起動確認・ロード中モデル・デバイス情報 |
 | GET | `/api/v1/samplers` | 利用可能なサンプラー一覧 |
 | POST | `/api/v1/generations/text-to-image` | txt2img生成 |
+| POST | `/api/v1/generations/image-to-image` | 元画像とプロンプトによる img2img生成 |
 
 詳細は `backend/src/sodalite_backend/api/` を参照。
 

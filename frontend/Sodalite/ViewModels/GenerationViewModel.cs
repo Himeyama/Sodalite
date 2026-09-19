@@ -36,6 +36,8 @@ sealed class GenerationViewModel : INotifyPropertyChanged
     int _batchSize = 1;
     string _sampler = "euler_a";
     string _seedText = "";
+    string? _initialImage;
+    double _strength = 0.4;
     string _statusText = ResourceLoader.GetString("Generation_BackendStarting");
     bool _isGenerating;
     bool _isBackendReady;
@@ -135,6 +137,19 @@ sealed class GenerationViewModel : INotifyPropertyChanged
     {
         get => _seedText;
         set => SetField(ref _seedText, value);
+    }
+
+    /// <summary>選択した元画像の base64。null のときは通常の text-to-image として生成する。</summary>
+    public string? InitialImage
+    {
+        get => _initialImage;
+        set => SetField(ref _initialImage, value);
+    }
+
+    public double Strength
+    {
+        get => _strength;
+        set => SetField(ref _strength, value);
     }
 
     public string StatusText
@@ -273,9 +288,13 @@ sealed class GenerationViewModel : INotifyPropertyChanged
                 BatchSize,
                 Sampler,
                 seed,
-                loras);
+                loras,
+                InitialImage,
+                Strength);
 
-            GenerationResult started = await apiClient.StartTextToImageAsync(request, ct).ConfigureAwait(false);
+            GenerationResult started = InitialImage is null
+                ? await apiClient.StartTextToImageAsync(request, ct).ConfigureAwait(false)
+                : await apiClient.StartImageToImageAsync(request, ct).ConfigureAwait(false);
             _runningJobId = started.JobId;
 
             await PollUntilDoneAsync(apiClient, started.JobId, ct).ConfigureAwait(false);

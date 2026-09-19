@@ -292,6 +292,36 @@ def test_generate_yields_one_image_per_batch_item() -> None:
     assert pipeline.call_count == 3
 
 
+def test_generate_uses_img2img_pipeline_for_an_initial_image() -> None:
+    manager = _make_manager()
+    text_pipeline = MagicMock()
+    image_pipeline = MagicMock()
+    manager._pipeline = text_pipeline
+    manager.set_sampler = MagicMock()
+
+    with patch(
+        "sodalite_backend.inference.pipeline_manager.AutoPipelineForImage2Image"
+    ) as image_pipeline_factory:
+        image_pipeline_factory.from_pipe.return_value = image_pipeline
+        list(
+            manager.generate(
+                prompt="a cat",
+                negative_prompt="",
+                steps=4,
+                cfg_scale=7.0,
+                width=64,
+                height=64,
+                sampler="euler_a",
+                seed=None,
+                initial_image=MagicMock(),
+                strength=0.7,
+            )
+        )
+
+    image_pipeline_factory.from_pipe.assert_called_once_with(text_pipeline)
+    assert image_pipeline.call_args.kwargs["strength"] == 0.7
+
+
 def test_generate_stops_early_when_should_stop_becomes_true() -> None:
     manager = _make_manager()
     pipeline = MagicMock()

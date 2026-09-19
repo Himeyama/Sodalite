@@ -12,4 +12,6 @@ sealed record GenerationRequest(
     int BatchSize = 1,
     string Sampler = "euler_a",
     long? Seed = null,
-    IReadOnlyList<LoraSelection>? Loras = null);
+    IReadOnlyList<LoraSelection>? Loras = null,
+    string? InitialImage = null,
+    double Strength = 0.4);

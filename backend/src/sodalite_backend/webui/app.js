@@ -16,6 +16,10 @@ const els = {
   stepsOut: $("steps-out"),
   cfg: $("cfg"),
   cfgOut: $("cfg-out"),
+  strength: $("strength"),
+  strengthOut: $("strength-out"),
+  sourceImage: $("source-image"),
+  sourceImageName: $("source-image-name"),
   width: $("width"),
   height: $("height"),
   batch: $("batch"),
@@ -61,6 +65,7 @@ const els = {
 let runningJobId = null;
 let activeModelId = null;
 let lightboxImage = null;
+let initialImageBase64 = null;
 
 async function getJson(path) {
   const res = await fetch(API + path);
@@ -320,7 +325,7 @@ function collectLoras() {
 function buildRequest() {
   const seedText = els.seed.value.trim();
   const seed = seedText === "" ? null : Number.parseInt(seedText, 10);
-  return {
+  const body = {
     prompt: els.prompt.value,
     negative_prompt: els.negativePrompt.value,
     steps: Number(els.steps.value),
@@ -332,6 +337,11 @@ function buildRequest() {
     seed: Number.isNaN(seed) ? null : seed,
     loras: collectLoras(),
   };
+  if (initialImageBase64 !== null) {
+    body.initial_image = initialImageBase64;
+    body.strength = Number(els.strength.value);
+  }
+  return body;
 }
 
 // --- プロンプト等の永続化 (ブラウザ更新をまたいで保持) ---
@@ -417,7 +427,8 @@ async function onGenerate() {
   setStatus("生成を開始しています…");
 
   try {
-    const res = await fetch(API + "/generations/text-to-image", {
+    const endpoint = body.initial_image ? "/generations/image-to-image" : "/generations/text-to-image";
+    const res = await fetch(API + endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -513,6 +524,31 @@ function setGenerating(active) {
   els.generate.disabled = active;
   els.cancel.hidden = !active;
   els.cancel.disabled = false;
+  els.sourceImage.disabled = active;
+  els.strength.disabled = active || initialImageBase64 === null;
+}
+
+async function selectSourceImage() {
+  const file = els.sourceImage.files?.[0];
+  if (!file) {
+    initialImageBase64 = null;
+    els.sourceImageName.textContent = "画像は選択されていません";
+    els.strength.disabled = true;
+    els.steps.value = "20";
+    els.stepsOut.textContent = "20";
+    return;
+  }
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result));
+    reader.addEventListener("error", reject);
+    reader.readAsDataURL(file);
+  });
+  initialImageBase64 = String(dataUrl).split(",", 2)[1] ?? null;
+  els.sourceImageName.textContent = file.name;
+  els.strength.disabled = initialImageBase64 === null;
+  els.steps.value = "40";
+  els.stepsOut.textContent = "40";
 }
 
 // --- モデル選択 ---
@@ -854,6 +890,15 @@ function wireEvents() {
   });
   els.cfg.addEventListener("input", () => {
     els.cfgOut.textContent = Number(els.cfg.value).toFixed(1);
+  });
+  els.strength.addEventListener("input", () => {
+    els.strengthOut.textContent = Number(els.strength.value).toFixed(2);
+  });
+  els.sourceImage.addEventListener("change", () => {
+    selectSourceImage().catch(() => {
+      initialImageBase64 = null;
+      els.sourceImageName.textContent = "画像を読み込めませんでした";
+    });
   });
   els.generate.addEventListener("click", onGenerate);
   els.cancel.addEventListener("click", onCancel);
