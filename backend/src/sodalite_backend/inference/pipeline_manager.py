@@ -16,6 +16,11 @@ from diffusers import (
 from PIL import Image
 
 from sodalite_backend.inference.samplers import SAMPLER_CLASSES
+from sodalite_backend.inference.prompt_weights import (
+    apply_attention_weights,
+    has_attention_syntax,
+    parse_prompt_attention,
+)
 from sodalite_backend.schemas.generation import LoraSpec, Sampler
 
 
@@ -226,6 +231,59 @@ class PipelineManager:
                 self._image_to_image_pipeline.enable_vae_slicing()
         return self._image_to_image_pipeline
 
+    def _weighted_prompt_arguments(
+        self, pipeline: DiffusionPipeline, prompt: str, negative_prompt: str, cfg_scale: float
+    ) -> dict[str, object]:
+        """Encode prompt-attention syntax once, then pass weighted embeds to diffusers."""
+        clean_prompt = "".join(fragment.text for fragment in parse_prompt_attention(prompt))
+        clean_negative_prompt = "".join(
+            fragment.text for fragment in parse_prompt_attention(negative_prompt)
+        )
+        use_guidance = cfg_scale > 1.0
+
+        if getattr(pipeline, "text_encoder_2", None) is not None:
+            prompt_embeds, negative_embeds, pooled_embeds, negative_pooled_embeds = (
+                pipeline.encode_prompt(
+                    prompt=clean_prompt,
+                    prompt_2=None,
+                    device=self.device,
+                    num_images_per_prompt=1,
+                    do_classifier_free_guidance=use_guidance,
+                    negative_prompt=clean_negative_prompt or None,
+                    negative_prompt_2=None,
+                )
+            )
+            arguments: dict[str, object] = {
+                "prompt_embeds": apply_attention_weights(
+                    prompt_embeds, pipeline.tokenizer, parse_prompt_attention(prompt)
+                ),
+                "pooled_prompt_embeds": pooled_embeds,
+            }
+            if negative_embeds is not None and negative_pooled_embeds is not None:
+                arguments["negative_prompt_embeds"] = apply_attention_weights(
+                    negative_embeds, pipeline.tokenizer, parse_prompt_attention(negative_prompt)
+                )
+                arguments["negative_pooled_prompt_embeds"] = negative_pooled_embeds
+            return arguments
+
+        prompt_embeds, negative_embeds = pipeline.encode_prompt(
+            prompt=clean_prompt,
+            device=self.device,
+            num_images_per_prompt=1,
+            do_classifier_free_guidance=use_guidance,
+            negative_prompt=clean_negative_prompt or None,
+        )
+        arguments = {
+            "prompt_embeds": apply_attention_weights(
+                prompt_embeds, pipeline.tokenizer, parse_prompt_attention(prompt)
+            )
+        }
+        if negative_embeds is not None:
+            arguments["negative_prompt_embeds"] = apply_attention_weights(
+                negative_embeds, pipeline.tokenizer, parse_prompt_attention(negative_prompt)
+            )
+        return arguments
+
     def generate(
         self,
         prompt: str,
@@ -295,6 +353,12 @@ class PipelineManager:
                     generator=generator,
                     callback_on_step_end=report_step if on_step is not None else None,
                 )
+                if has_attention_syntax(prompt) or has_attention_syntax(negative_prompt):
+                    arguments.pop("prompt")
+                    arguments.pop("negative_prompt")
+                    arguments.update(
+                        self._weighted_prompt_arguments(pipeline, prompt, negative_prompt, cfg_scale)
+                    )
                 if initial_image is not None:
                     arguments["image"] = initial_image
                     arguments["strength"] = strength

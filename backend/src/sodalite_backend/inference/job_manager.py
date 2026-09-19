@@ -118,19 +118,19 @@ class JobManager:
 
         try:
             initial_image = (
-                _decode_initial_image(request.initial_image).resize(
-                    (request.width, request.height), Image.Resampling.LANCZOS
-                )
+                _prepare_initial_image(_decode_initial_image(request.initial_image))
                 if isinstance(request, ImageToImageRequest)
                 else None
             )
+            generation_width = 1024 if initial_image is not None else request.width
+            generation_height = 1024 if initial_image is not None else request.height
             images = self._pipeline_manager.generate(
                 prompt=request.prompt,
                 negative_prompt=request.negative_prompt,
                 steps=request.steps,
                 cfg_scale=request.cfg_scale,
-                width=request.width,
-                height=request.height,
+                width=generation_width,
+                height=generation_height,
                 sampler=request.sampler,
                 seed=request.seed,
                 batch_size=request.batch_size,
@@ -143,6 +143,8 @@ class JobManager:
 
             # Do not embed the (potentially multi-megabyte) source image in every output PNG.
             metadata = request.model_dump(exclude={"initial_image"})
+            metadata["width"] = generation_width
+            metadata["height"] = generation_height
             images_completed = 0
             for image in images:
                 image_path = new_image_path()
@@ -183,3 +185,14 @@ def _decode_initial_image(encoded_image: str) -> Image.Image:
             return image.convert("RGB").copy()
     except Exception as exc:
         raise ValueError("The selected image is not a valid image file.") from exc
+
+
+def _prepare_initial_image(image: Image.Image) -> Image.Image:
+    """Center-crop a source image to a square and resize it for fast SDXL img2img."""
+    target_size = 1024
+    if image.width != image.height:
+        side = min(image.width, image.height)
+        left = (image.width - side) // 2
+        top = (image.height - side) // 2
+        image = image.crop((left, top, left + side, top + side))
+    return image.resize((target_size, target_size), Image.Resampling.LANCZOS)

@@ -156,11 +156,17 @@
   <data name="Generation_PromptTextBox.PlaceholderText" xml:space="preserve">
     <value>1girl, classroom, gym uniform</value>
   </data>
+  <data name="Generation_PastePromptButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
+    <value>貼付</value>
+  </data>
   <data name="Generation_NegativePromptLabel.Text" xml:space="preserve">
     <value>ネガティブプロンプト</value>
   </data>
   <data name="Generation_NegativePromptTextBox.PlaceholderText" xml:space="preserve">
     <value>low quality, blurry</value>
+  </data>
+  <data name="Generation_PasteNegativePromptButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
+    <value>貼付</value>
   </data>
   <data name="Generation_SourceImageLabel.Text" xml:space="preserve">
     <value>元画像（選択時は image-to-image）</value>

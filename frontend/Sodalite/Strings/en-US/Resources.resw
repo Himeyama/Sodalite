@@ -156,11 +156,17 @@
   <data name="Generation_PromptTextBox.PlaceholderText" xml:space="preserve">
     <value>a cat wearing sunglasses</value>
   </data>
+  <data name="Generation_PastePromptButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
+    <value>Paste</value>
+  </data>
   <data name="Generation_NegativePromptLabel.Text" xml:space="preserve">
     <value>Negative prompt</value>
   </data>
   <data name="Generation_NegativePromptTextBox.PlaceholderText" xml:space="preserve">
     <value>low quality, blurry</value>
+  </data>
+  <data name="Generation_PasteNegativePromptButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
+    <value>Paste</value>
   </data>
   <data name="Generation_SourceImageLabel.Text" xml:space="preserve">
     <value>Source image (enables image-to-image)</value>

@@ -228,3 +228,28 @@ def test_image_to_image_forwards_decoded_source_and_strength(
     assert kwargs["initial_image"].mode == "RGB"
     assert kwargs["initial_image"].size == (1024, 1024)
     assert kwargs["strength"] == 0.7
+
+
+def test_image_to_image_center_crops_a_rectangular_source(
+    client: TestClient, mock_pipeline_manager, wait_for_job_done
+) -> None:
+    import base64
+    from io import BytesIO
+
+    from PIL import Image
+
+    source = Image.new("RGB", (200, 100), "blue")
+    source.paste("red", (50, 0, 150, 100))
+    buffer = BytesIO()
+    source.save(buffer, format="PNG")
+    response = client.post(
+        "/api/v1/generations/image-to-image",
+        json={"prompt": "a cat", "initial_image": base64.b64encode(buffer.getvalue()).decode()},
+    )
+
+    assert wait_for_job_done(client, response.json()["job_id"])["status"] == "completed"
+    _, kwargs = mock_pipeline_manager.generate.call_args
+    prepared = kwargs["initial_image"]
+    assert prepared.size == (1024, 1024)
+    # The crop keeps the central red square, rather than the blue edges.
+    assert prepared.getpixel((512, 512)) == (255, 0, 0)

@@ -216,6 +216,20 @@ public sealed partial class GenerationPage : Page
         await _viewModel.GenerateAsync(CancellationToken.None);
     }
 
+    async void PastePromptButton_Click(object sender, RoutedEventArgs e) =>
+        PromptTextBox.Text = await GetClipboardTextAsync();
+
+    async void PasteNegativePromptButton_Click(object sender, RoutedEventArgs e) =>
+        NegativePromptTextBox.Text = await GetClipboardTextAsync();
+
+    static async Task<string> GetClipboardTextAsync()
+    {
+        DataPackageView clipboard = Clipboard.GetContent();
+        return clipboard.Contains(StandardDataFormats.Text)
+            ? await clipboard.GetTextAsync()
+            : string.Empty;
+    }
+
     async void CancelButton_Click(object sender, RoutedEventArgs e)
     {
         CancelButton.IsEnabled = false;
