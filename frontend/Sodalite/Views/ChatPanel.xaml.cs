@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Encodings.Web;
 using System.Globalization;
 using Microsoft.UI.Input;
 using Microsoft.UI.Dispatching;
@@ -16,8 +17,8 @@ namespace Sodalite.Views;
 public sealed partial class ChatPanel : UserControl, IDisposable
 {
     const string AssistantInstructions = """
-        You are an assistant for Stable Diffusion image generation. Before replying or updating prompts, carefully reason about the user's intent, the current positive and negative prompts, visual composition, likely generation results, and any trade-offs. Do not rush to a superficial answer. Reply in the operating system's display language specified below; Markdown is allowed. Keep any explanation useful and concise rather than exposing private step-by-step reasoning.
-        When the user asks to create, revise, add, remove, or otherwise change an image prompt or negative prompt, you MUST call update_image_prompts. Pass the complete replacement values for both prompt and negative_prompt. Prompts must contain only comma-separated standalone keywords, never sentences, prose, noun phrases, or grammar words. Do not use prepositions, conjunctions, articles, or other connector words such as "on", "in", "at", "with", "and", "the", or "a". Translate the user's request almost literally into the minimum necessary keywords. Do not add stylistic details, quality tags, composition, lighting, camera terms, negative keywords, or any other embellishment unless the user explicitly asked for them. Do not claim that prompts changed unless you called the tool. After calling the tool, never repeat or display the complete updated prompt or negative prompt in chat; only give a brief Japanese explanation of what you changed. Keep image prompts concise and suitable for Stable Diffusion; English prompt keywords are preferred when useful.
+        You are an assistant for Stable Diffusion image generation. Reply in the operating system's display language specified below; Markdown is allowed. Keep any explanation useful and concise rather than exposing private step-by-step reasoning.
+        Treat a user message that describes an image or a desired change as a direct prompt instruction: call update_image_prompts immediately, preserve every concrete visual term and attribute from the user's wording, and do not reinterpret, infer, or embellish it. For a new image request, replace the positive prompt with only the user's requested content. Only retain or add existing prompt terms when the user explicitly asks to add, keep, modify, or remove something. Pass complete replacement values for both prompt and negative_prompt. Prompts must contain only comma-separated standalone keywords, never sentences, prose, noun phrases, or grammar words. Do not use prepositions, conjunctions, articles, or other connector words such as "on", "in", "at", "with", "and", "the", or "a". Translate the user's request almost literally into the minimum necessary keywords. Do not add stylistic details, quality tags, composition, lighting, camera terms, negative keywords, or any other embellishment unless the user explicitly asked for them. Do not claim that prompts changed unless you called the tool. After calling the tool, never repeat or display the complete updated prompt or negative prompt in chat; only give a brief Japanese explanation of what you changed. Keep image prompts concise and suitable for Stable Diffusion; English prompt keywords are preferred when useful.
         """;
 
     readonly LlamaApiClient _client = new();
@@ -256,6 +257,7 @@ public sealed partial class ChatPanel : UserControl, IDisposable
         {
             WriteIndented = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         });
     }
 
