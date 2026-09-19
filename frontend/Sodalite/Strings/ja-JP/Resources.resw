@@ -159,6 +159,12 @@
   <data name="Generation_PastePromptButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>貼付</value>
   </data>
+  <data name="Generation_UndoChatPromptButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
+    <value>AIによるプロンプト反映を戻す</value>
+  </data>
+  <data name="Generation_UndoChatNegativePromptButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
+    <value>AIによるプロンプト反映を戻す</value>
+  </data>
   <data name="Generation_NegativePromptLabel.Text" xml:space="preserve">
     <value>ネガティブプロンプト</value>
   </data>

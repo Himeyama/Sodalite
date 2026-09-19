@@ -27,16 +27,23 @@ static class AppSettings
         set => Save(Load() with { WebUiEnabled = value });
     }
 
+    /// <summary>llama.cpp の OpenAI 互換 API で最後に選択したチャットモデル。</summary>
+    public static string? LastChatModelId
+    {
+        get => Load().LastChatModelId;
+        set => Save(Load() with { LastChatModelId = value });
+    }
+
     static Settings Load()
     {
         try
         {
             string json = File.ReadAllText(SettingsFilePath);
-            return JsonSerializer.Deserialize<Settings>(json) ?? new Settings(null, true);
+            return JsonSerializer.Deserialize<Settings>(json) ?? new Settings(null, true, null);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            return new Settings(null, true);
+            return new Settings(null, true, null);
         }
     }
 
@@ -53,5 +60,6 @@ static class AppSettings
 
     sealed record Settings(
         [property: JsonPropertyName("last_model_id")] string? LastModelId,
-        [property: JsonPropertyName("webui_enabled")] bool WebUiEnabled);
+        [property: JsonPropertyName("webui_enabled")] bool WebUiEnabled,
+        [property: JsonPropertyName("last_chat_model_id")] string? LastChatModelId);
 }

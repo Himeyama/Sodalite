@@ -29,6 +29,7 @@ public sealed partial class GenerationPage : Page
     int _backendStartingSpinnerIndex;
     double _skeletonAspectRatio = 1.0;
     bool _isSkeletonScreenEnabled = true;
+    (string Prompt, string NegativePrompt)? _promptStateBeforeChatUpdate;
 
     public event EventHandler<string>? StatusChanged;
 
@@ -36,6 +37,10 @@ public sealed partial class GenerationPage : Page
 
     /// <summary>初回モデルのロードが完了し、生成・モデル切り替えが可能になったときに発火する。</summary>
     public event EventHandler? BackendReadyChanged;
+
+    public event EventHandler<bool>? ChatAvailabilityChanged;
+
+    public event EventHandler<string?>? ChatModelChanged;
 
     /// <summary>FileSavePicker の初期化に使うオーナーウィンドウ。MainWindow から注入する。</summary>
     internal Window? OwnerWindow { get; set; }
@@ -46,6 +51,9 @@ public sealed partial class GenerationPage : Page
 
         _viewModel = new GenerationViewModel(DispatcherQueue);
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+        ChatPanelControl.AvailabilityChanged += (_, available) => ChatAvailabilityChanged?.Invoke(this, available);
+        ChatPanelControl.SelectedModelChanged += (_, model) => ChatModelChanged?.Invoke(this, model);
+        ChatPanelControl.PromptUpdateRequested += (_, update) => ApplyChatPromptUpdate(update);
 
         GenerateButton.IsEnabled = false;
 
@@ -75,6 +83,44 @@ public sealed partial class GenerationPage : Page
 
     internal Task RefreshDeviceInfoAsync(BackendApiClient apiClient) =>
         _viewModel.RefreshDeviceInfoAsync(apiClient, CancellationToken.None);
+
+    /// <summary>llama.cpp の稼働確認とモデル一覧取得を開始する。失敗時はチャットを表示しない。</summary>
+    internal Task InitializeChatAsync() =>
+        ChatPanelControl.InitializeAsync(() => (PromptTextBox.Text, NegativePromptTextBox.Text));
+
+    internal void SetChatOpen(bool isOpen)
+    {
+        ChatPanelControl.Visibility = isOpen ? Visibility.Visible : Visibility.Collapsed;
+        // ChatPanel が非表示なら列幅もなくし、従来どおり設定・結果を広く使う。
+        ((ColumnDefinition)((Grid)Content).ColumnDefinitions[0]).Width = isOpen
+            ? new GridLength(320)
+            : new GridLength(0);
+    }
+
+    internal void DisposeChat() => ChatPanelControl.Dispose();
+
+    void ApplyChatPromptUpdate(ChatPromptUpdate update)
+    {
+        _promptStateBeforeChatUpdate = (PromptTextBox.Text, NegativePromptTextBox.Text);
+        PromptTextBox.Text = update.Prompt;
+        NegativePromptTextBox.Text = update.NegativePrompt;
+        UndoChatPromptButton.IsEnabled = true;
+        UndoChatNegativePromptButton.IsEnabled = true;
+    }
+
+    void UndoChatPromptButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_promptStateBeforeChatUpdate is not (string prompt, string negativePrompt))
+        {
+            return;
+        }
+
+        PromptTextBox.Text = prompt;
+        NegativePromptTextBox.Text = negativePrompt;
+        _promptStateBeforeChatUpdate = null;
+        UndoChatPromptButton.IsEnabled = false;
+        UndoChatNegativePromptButton.IsEnabled = false;
+    }
 
     /// <summary>ギャラリーで選択した履歴のパラメータを入力欄・LoRA選択に復元する。
     /// GenerateButton_Click は「コントロール値→ViewModel」の一方向同期のため、ViewModel

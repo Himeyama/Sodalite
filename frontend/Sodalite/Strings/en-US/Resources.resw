@@ -159,6 +159,12 @@
   <data name="Generation_PastePromptButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Paste</value>
   </data>
+  <data name="Generation_UndoChatPromptButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
+    <value>Undo the AI prompt update</value>
+  </data>
+  <data name="Generation_UndoChatNegativePromptButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
+    <value>Undo the AI prompt update</value>
+  </data>
   <data name="Generation_NegativePromptLabel.Text" xml:space="preserve">
     <value>Negative prompt</value>
   </data>

@@ -20,6 +20,7 @@ public sealed partial class MainWindow : Window
     readonly SystemMonitorService _systemMonitorService = new();
     readonly DispatcherTimer _systemStatsTimer;
     BackendApiClient? _apiClient;
+    bool _isChatOpen;
 
     public MainWindow()
     {
@@ -41,12 +42,18 @@ public sealed partial class MainWindow : Window
         _generationPage.StatusChanged += (_, status) => StatusBarTextBlock.Text = status;
         _generationPage.DeviceInfoChanged += (_, deviceInfo) => StatusBarDeviceInfoTextBlock.Text = deviceInfo;
         _generationPage.BackendReadyChanged += (_, _) => ModelSelectionButton.IsEnabled = true;
+        _generationPage.ChatAvailabilityChanged += GenerationPage_ChatAvailabilityChanged;
+        _generationPage.ChatModelChanged += GenerationPage_ChatModelChanged;
         _generationPage.NotifyCurrentStatus();
 
         _galleryPage.BackRequested += GalleryPage_BackRequested;
         _galleryPage.ReuseParametersRequested += GalleryPage_ReuseParametersRequested;
 
         RootHost.Children.Add(_generationPage);
+
+        // llama.cpp は Sodalite のバックエンドとは別にユーザーが起動する任意プロセス。
+        // 起動直後は非表示のまま /v1/models の応答を待ち、成功した場合だけチャットを出す。
+        _ = _generationPage.InitializeChatAsync();
 
         _systemStatsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _systemStatsTimer.Tick += SystemStatsTimer_Tick;
@@ -276,6 +283,27 @@ public sealed partial class MainWindow : Window
         SkeletonScreenToggleButton.Opacity = isEnabled ? 0.7 : 1.0;
     }
 
+    void GenerationPage_ChatAvailabilityChanged(object? sender, bool available)
+    {
+        ChatButton.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
+        if (!available)
+        {
+            _isChatOpen = false;
+            _generationPage.SetChatOpen(false);
+        }
+    }
+
+    void GenerationPage_ChatModelChanged(object? sender, string? model)
+    {
+        ChatStatusTextBlock.Text = string.IsNullOrWhiteSpace(model) ? "チャット" : $"チャット/{model}";
+    }
+
+    void ChatButton_Click(object sender, RoutedEventArgs e)
+    {
+        _isChatOpen = !_isChatOpen;
+        _generationPage.SetChatOpen(_isChatOpen);
+    }
+
     // webui の有効・無効はバックエンドプロセス起動時の --webui フラグでしか切り替えられないため、
     // ここでは次回起動用の設定を保存するだけで、既に起動中のバックエンドには反映しない。
     void WebUiToggleButton_Click(object sender, RoutedEventArgs e)
@@ -300,6 +328,7 @@ public sealed partial class MainWindow : Window
     async void MainWindow_Closed(object sender, WindowEventArgs args)
     {
         _systemStatsTimer.Stop();
+        _generationPage.DisposeChat();
         _apiClient?.Dispose();
         await _backendProcessManager.DisposeAsync();
     }
