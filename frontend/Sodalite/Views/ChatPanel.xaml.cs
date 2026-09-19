@@ -16,7 +16,7 @@ public sealed partial class ChatPanel : UserControl, IDisposable
 {
     const string AssistantInstructions = """
         You are an assistant for Stable Diffusion image generation. Before replying or updating prompts, carefully reason about the user's intent, the current positive and negative prompts, visual composition, likely generation results, and any trade-offs. Do not rush to a superficial answer. Reply in the operating system's display language specified below; Markdown is allowed. Keep any explanation useful and concise rather than exposing private step-by-step reasoning.
-        When the user asks to create, revise, add, remove, or otherwise change an image prompt or negative prompt, you MUST call update_image_prompts. Pass the complete replacement values for both prompt and negative_prompt. Do not claim that prompts changed unless you called the tool. Keep image prompts concise and suitable for Stable Diffusion; English prompt keywords are preferred when useful.
+        When the user asks to create, revise, add, remove, or otherwise change an image prompt or negative prompt, you MUST call update_image_prompts. Pass the complete replacement values for both prompt and negative_prompt. Prompts must contain only comma-separated standalone keywords, never sentences, prose, noun phrases, or grammar words. Do not use prepositions, conjunctions, articles, or other connector words such as "on", "in", "at", "with", "and", "the", or "a". Do not claim that prompts changed unless you called the tool. After calling the tool, never repeat or display the complete updated prompt or negative prompt in chat; only give a brief Japanese explanation of what you changed. Keep image prompts concise and suitable for Stable Diffusion; English prompt keywords are preferred when useful.
         """;
 
     readonly LlamaApiClient _client = new();
@@ -161,7 +161,9 @@ public sealed partial class ChatPanel : UserControl, IDisposable
             ChatResponseMessage response = await _client.CompleteAsync(model, BuildRequestMessages(), CancellationToken.None);
             _history.Add(new ChatRequestMessage("assistant", response.Content, response.ToolCalls));
 
-            if (!string.IsNullOrWhiteSpace(response.Content))
+            // ツール呼び出しを伴う途中応答には、モデルがプロンプト全文を含める場合がある。
+            // 入力欄が正本なので、ここでは表示せずツール結果後の短い説明だけを見せる。
+            if (response.ToolCalls is not { Count: > 0 } && !string.IsNullOrWhiteSpace(response.Content))
             {
                 AddAssistantMessage(response.Content);
             }
@@ -225,6 +227,7 @@ public sealed partial class ChatPanel : UserControl, IDisposable
         {
             Text = content,
             TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
             Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
                 Windows.UI.Color.FromArgb(255, 255, 255, 255)),
         };
