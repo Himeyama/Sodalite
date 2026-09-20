@@ -4,7 +4,7 @@
 
 Stable Diffusion 画像生成デスクトップアプリ。一から独自実装したもの。
 
-<img width="600" src="https://github.com/user-attachments/assets/3a4f62b7-7743-45a9-bb48-f8f7a7b87557" />
+<img width="600" src="https://github.com/user-attachments/assets/ca8de416-c853-4d05-9cb6-cab8c7c9bbd3" />
 
 ## 主な機能
 
