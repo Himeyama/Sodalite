@@ -27,9 +27,11 @@
 
             <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="8">
                 <TextBox x:Name="MessageTextBox" AcceptsReturn="True" TextWrapping="Wrap"
-                         PlaceholderText="メッセージを入力" PreviewKeyDown="MessageTextBox_KeyDown" />
+                         PlaceholderText="メッセージを入力" PreviewKeyDown="MessageTextBox_KeyDown"
+                         TextChanged="MessageTextBox_TextChanged" />
                 <Button Grid.Column="1" x:Name="SendButton" Style="{ThemeResource AccentButtonStyle}"
-                        ToolTipService.ToolTip="送信 (Enter)" VerticalAlignment="Bottom" Click="SendButton_Click">
+                        ToolTipService.ToolTip="送信 (Enter)" VerticalAlignment="Bottom" Click="SendButton_Click"
+                        IsEnabled="False">
                     <FontIcon Glyph="&#xE724;" />
                 </Button>
             </Grid>

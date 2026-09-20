@@ -18,7 +18,10 @@ public sealed partial class ChatPanel : UserControl, IDisposable
 {
     const string AssistantInstructions = """
         You are an assistant for Stable Diffusion image generation. Reply in the operating system's display language specified below; Markdown is allowed. Keep any explanation useful and concise rather than exposing private step-by-step reasoning.
-        Treat a user message that describes an image or a desired change as a direct prompt instruction: call update_image_prompts immediately, preserve every concrete visual term and attribute from the user's wording, and do not reinterpret, infer, or embellish it. For a new image request, replace the positive prompt with only the user's requested content. Only retain or add existing prompt terms when the user explicitly asks to add, keep, modify, or remove something. Pass complete replacement values for both prompt and negative_prompt. Prompts must contain only comma-separated standalone keywords, never sentences, prose, noun phrases, or grammar words. Do not use prepositions, conjunctions, articles, or other connector words such as "on", "in", "at", "with", "and", "the", or "a". Translate the user's request almost literally into the minimum necessary keywords. Do not add stylistic details, quality tags, composition, lighting, camera terms, negative keywords, or any other embellishment unless the user explicitly asked for them. Do not claim that prompts changed unless you called the tool. After calling the tool, never repeat or display the complete updated prompt or negative prompt in chat; only give a brief Japanese explanation of what you changed. Keep image prompts concise and suitable for Stable Diffusion; English prompt keywords are preferred when useful.
+        Before updating prompts, reason carefully and thoroughly in private. Consider the entire conversation, the current positive and negative prompts, every concrete visual requirement in the newest user message, requested additions, removals, replacements, and any conflicts between them. Resolve ambiguities conservatively without dropping requested details.
+        Treat a user message that describes an image or a desired change as a direct prompt instruction and call update_image_prompts. Build a lean, high-signal prompt: include only terms necessary for the user's request and the relevant existing image. Use each tag only once. Remove duplicate terms, near-synonyms, conflicting terms, and irrelevant leftover terms. Do not retain an existing term merely because it is already present; retain it only when it remains directly relevant. When the user asks for a wholly new image, replace the prior positive prompt rather than combining unrelated content.
+        Prioritize the main subject and only its essential attributes. Avoid fine-grained depiction because excessive detail can reduce generation quality: omit decorative, technical, and secondary details unless they are indispensable to the user's request. Do not invent any details. Use the current image prompt and negative prompt as context when determining what remains relevant, then pass complete replacement values for both prompt and negative_prompt. Add only one default quality term, "high quality", to an updated positive prompt. Do not add other quality tags, styles, composition, lighting, camera terms, negative keywords, or other details unless the user explicitly requested them.
+        Prompts must contain only comma-separated standalone keywords, never sentences, prose, noun phrases, or grammar words. Prefer common, well-established Stable Diffusion and image-dataset tags over rare wording, elaborate synonyms, or newly coined descriptions. Do not use prepositions, conjunctions, articles, or other connector words such as "on", "in", "at", "with", "and", "the", or "a". Translate the user's request almost literally into the minimum necessary keywords. Do not claim that prompts changed unless you called the tool. After calling the tool, never repeat or display the complete updated prompt or negative prompt in chat; only give a brief Japanese explanation of what you changed. Keep image prompts concise and suitable for Stable Diffusion; English prompt keywords are preferred when useful.
         """;
 
     readonly LlamaApiClient _client = new();
@@ -110,6 +113,8 @@ public sealed partial class ChatPanel : UserControl, IDisposable
 
     async void SendButton_Click(object sender, RoutedEventArgs e) => await SendAsync();
 
+    void MessageTextBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateSendButtonState();
+
     async void MessageTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key == VirtualKey.Enter && !e.KeyStatus.IsMenuKeyDown && !IsShiftKeyDown())
@@ -151,11 +156,19 @@ public sealed partial class ChatPanel : UserControl, IDisposable
         finally
         {
             _isSending = false;
-            SendButton.IsEnabled = true;
             MessageTextBox.IsEnabled = true;
+            UpdateSendButtonState();
             SendingProgressRing.IsActive = false;
             SendingProgressRing.Visibility = Visibility.Collapsed;
             MessageTextBox.Focus(FocusState.Programmatic);
+        }
+    }
+
+    void UpdateSendButtonState()
+    {
+        if (SendButton is not null)
+        {
+            SendButton.IsEnabled = !_isSending && !string.IsNullOrWhiteSpace(MessageTextBox.Text);
         }
     }
 
@@ -216,8 +229,8 @@ public sealed partial class ChatPanel : UserControl, IDisposable
         {
             using JsonDocument arguments = JsonDocument.Parse(call.Function.Arguments);
             JsonElement root = arguments.RootElement;
-            string prompt = root.GetProperty("prompt").GetString() ?? "";
-            string negativePrompt = root.GetProperty("negative_prompt").GetString() ?? "";
+            string prompt = RemoveDuplicateTags(root.GetProperty("prompt").GetString() ?? "");
+            string negativePrompt = RemoveDuplicateTags(root.GetProperty("negative_prompt").GetString() ?? "");
             PromptUpdateRequested?.Invoke(this, new ChatPromptUpdate(prompt, negativePrompt));
             return "The image prompts were updated in the application.";
         }
@@ -225,6 +238,22 @@ public sealed partial class ChatPanel : UserControl, IDisposable
         {
             return "The tool arguments were invalid; no prompt was changed.";
         }
+    }
+
+    static string RemoveDuplicateTags(string prompt)
+    {
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        List<string> uniqueTags = [];
+        foreach (string tag in prompt.Split([',', '，'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            string trimmedTag = tag.Trim();
+            if (!string.IsNullOrEmpty(trimmedTag) && seen.Add(trimmedTag))
+            {
+                uniqueTags.Add(trimmedTag);
+            }
+        }
+
+        return string.Join(", ", uniqueTags);
     }
 
     void ResetButton_Click(object sender, RoutedEventArgs e)
@@ -275,12 +304,14 @@ public sealed partial class ChatPanel : UserControl, IDisposable
         {
             Child = text,
             Padding = new Thickness(10, 6, 10, 6),
-            CornerRadius = new CornerRadius(10),
+            CornerRadius = new CornerRadius(0),
             Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
                 Windows.UI.Color.FromArgb(255, 0, 120, 212)),
             HorizontalAlignment = HorizontalAlignment.Right,
             MaxWidth = 300,
         };
+        // WinUI の CornerRadius は絶対値指定。高さに対する丸みを 50% に抑える。
+        bubble.SizeChanged += (_, _) => bubble.CornerRadius = new CornerRadius(bubble.ActualHeight / 4);
         MessagesPanel.Children.Add(bubble);
         ScrollToBottom();
     }
