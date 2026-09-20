@@ -132,7 +132,8 @@ to create the virtual environment and install the dependencies (several GB for t
 friends, taking a few minutes to tens of minutes).
 
 - The setup result is recorded in `%LOCALAPPDATA%\Sodalite\.venv-ready`
-  (it stores the hash of `uv.lock`). The marker is written only on success; if setup fails,
+  as a dependency fingerprint (the hash of `uv.lock` excluding the app's own package version).
+  The marker is written only on success; if setup fails,
   **re-setup runs automatically on the next launch**. It also re-syncs when an app update
   changes the dependencies.
 - If uv is not found, a message prompting you to install uv is shown when the app starts.

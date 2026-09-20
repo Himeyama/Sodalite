@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Security;
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Win32;
 
 namespace Sodalite.Services;
@@ -9,7 +10,7 @@ namespace Sodalite.Services;
 /// <summary>
 /// バックエンドの Python 仮想環境(.venv)を初回起動時に用意する。
 /// <c>uv sync</c> を実行して依存をインストールし、成功を <c>%LOCALAPPDATA%\Sodalite\.venv-ready</c>
-/// マーカーに記録する。マーカーには uv.lock のハッシュを書き込み、依存が変わったら再セットアップする。
+/// マーカーに記録する。マーカーには依存関係部分の uv.lock のハッシュを書き込み、依存が変わったら再セットアップする。
 /// セットアップが失敗した場合はマーカーを書かないため、次回起動時に自動的に再試行される。
 /// </summary>
 /// <remarks>
@@ -20,6 +21,9 @@ sealed class UvNotFoundException(string message) : Exception(message);
 
 sealed class BackendEnvironmentSetup(string backendProjectPath)
 {
+    const string BackendPackageName = "sodalite-backend";
+    const string ProjectVersionPlaceholder = "<project-version>";
+
     static readonly string MarkerFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Sodalite",
@@ -39,9 +43,9 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
     /// </param>
     public async Task EnsureAsync(IProgress<string>? onProgress = null, CancellationToken ct = default)
     {
-        string currentLockHash = $"{ComputeLockHash()}:{Accelerator}";
+        string currentDependencyFingerprint = $"{ComputeDependencyLockHash()}:{Accelerator}";
 
-        if (IsUpToDate(currentLockHash))
+        if (IsUpToDate(currentDependencyFingerprint))
         {
             return;
         }
@@ -60,7 +64,7 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
         }
 
         // uv sync が終了コード 0 で完了した場合のみここに到達する。マーカーを書いて完了を記録する。
-        WriteMarker(currentLockHash);
+        WriteMarker(currentDependencyFingerprint);
     }
 
     async Task RemoveDirectMlTorchvisionAsync(CancellationToken ct)
@@ -107,12 +111,14 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
         }
     }
 
-    string ComputeLockHash()
+    string ComputeDependencyLockHash()
     {
         string lockPath = Path.Combine(_backendProjectPath, "uv.lock");
         try
         {
-            byte[] bytes = File.ReadAllBytes(lockPath);
+            string lockContents = File.ReadAllText(lockPath);
+            string dependencyLockContents = NormalizeDependencyLock(lockContents);
+            byte[] bytes = Encoding.UTF8.GetBytes(dependencyLockContents);
             return Convert.ToHexString(SHA256.HashData(bytes));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -120,6 +126,44 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
             // uv.lock が読めない場合はハッシュを固定せず、毎回セットアップを試みる方に倒す。
             return string.Empty;
         }
+    }
+
+    /// <summary>
+    /// uv.lock からアプリ自身のパッケージバージョンだけを固定値に置き換える。
+    /// bump-version.ps1 がアプリのバージョンを上げると uv.lock の editable package の
+    /// version も変わるが、依存関係は変わらないため、これをセットアップ再実行の理由にしない。
+    /// </summary>
+    static string NormalizeDependencyLock(string lockContents)
+    {
+        string normalizedLineEndings = lockContents.Replace("\r\n", "\n").Replace('\r', '\n');
+        string[] lines = normalizedLineEndings.Split('\n');
+        bool inPackageTable = false;
+        bool isBackendPackage = false;
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string trimmedLine = lines[i].Trim();
+
+            if (trimmedLine == "[[package]]")
+            {
+                inPackageTable = true;
+                isBackendPackage = false;
+                continue;
+            }
+
+            if (inPackageTable && trimmedLine.StartsWith("name = ", StringComparison.Ordinal))
+            {
+                isBackendPackage = trimmedLine == $"name = \"{BackendPackageName}\"";
+                continue;
+            }
+
+            if (isBackendPackage && trimmedLine.StartsWith("version = ", StringComparison.Ordinal))
+            {
+                lines[i] = $"version = \"{ProjectVersionPlaceholder}\"";
+            }
+        }
+
+        return string.Join('\n', lines);
     }
 
     async Task RunUvSyncAsync(string accelerator, IProgress<string>? onProgress, CancellationToken ct)
