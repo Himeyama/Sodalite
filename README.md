@@ -87,6 +87,12 @@ uv sync
 
 Turbo の推奨設定は 8 ステップ、CFG 0、Euler、1024×1024。モデル選択時に画面の値が自動設定される。Krea 2 Turbo はテキストからの画像生成に対応し、画像からの生成は使用できない。BF16 の大きなモデルなので、GPU ではテキストエンコーダー・生成器・VAE を順に CPU と GPU 間で入れ替えて実行する。
 
+### ANIMA Base v1.0
+
+モデルフォルダーに `anima-base-v1.0.safetensors` などの ANIMA チェックポイントを置き、モデル画面から選択する。初回選択時に、Qwen3 テキストエンコーダーやVAEなどの共通コンポーネントを Hugging Face の [`circlestone-labs/Anima-Base-v1.0-Diffusers`](https://huggingface.co/circlestone-labs/Anima-Base-v1.0-Diffusers) から取得する。チェックポイントは元の場所から読み込み、複製しない。
+
+ANIMA Base の目安は30〜50ステップ、CFG 4〜5、512²〜1536²ピクセル。アプリは ANIMA 固有のフロースケジューラーを使うため、サンプラー選択は適用されない。テキストからの画像生成に対応し、画像からの生成は使用できない。ANIMA のモデル重みは [CircleStone Labs Non-Commercial License](https://huggingface.co/circlestone-labs/Anima/blob/main/LICENSE.md) の対象です。利用前にライセンス条件を確認してください。
+
 ### 起動
 
 ```powershell

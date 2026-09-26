@@ -155,7 +155,7 @@ class JobManager:
                     job_id,
                     status="running",
                     progress=images_completed / request.batch_size,
-                    current_step=request.steps,
+                    current_step=0 if images_completed < request.batch_size else request.steps,
                     total_steps=request.steps,
                     images_completed=images_completed,
                     image_url=f"/api/v1/images/{image_path.name}",

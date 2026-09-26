@@ -231,8 +231,20 @@
   <data name="Generation_BatchSizeLabel.Text" xml:space="preserve">
     <value>生成枚数</value>
   </data>
-  <data name="Generation_BackendStarting" xml:space="preserve">
-    <value>バックエンドを起動中...</value>
+  <data name="Generation_BackendStartingStage" xml:space="preserve">
+    <value>バックエンド起動中... ({0})</value>
+  </data>
+  <data name="Generation_StartupPreparing" xml:space="preserve">
+    <value>起動準備中</value>
+  </data>
+  <data name="Generation_StartupPreparingEnvironment" xml:space="preserve">
+    <value>Python環境と依存パッケージを準備中</value>
+  </data>
+  <data name="Generation_StartupStartingServer" xml:space="preserve">
+    <value>サーバーの応答を待機中</value>
+  </data>
+  <data name="Generation_StartupLoadingModel" xml:space="preserve">
+    <value>モデルを読み込み中</value>
   </data>
   <data name="Generation_GenerateButtonLabel" xml:space="preserve">
     <value>生成</value>
@@ -247,10 +259,10 @@
     <value>シード値は整数で入力してください。</value>
   </data>
   <data name="Generation_Generating" xml:space="preserve">
-    <value>生成中... ({0:F1}秒)</value>
+    <value>生成中... {0}/{1}ステップ ({2:F0}%)・{3:F1}秒 ({4} s/step)</value>
   </data>
   <data name="Generation_GeneratingBatch" xml:space="preserve">
-    <value>生成中... {0}/{1} ({2:F1} s, {3:F1} s, {4:F1} s/image)</value>
+    <value>生成中... {0}/{1}枚・{2}/{3}ステップ ({4:F0}%)・{5:F1}秒 ({8} s/step、計{6:F1}秒、平均{7:F1}秒/枚)</value>
   </data>
   <data name="Generation_NoImageReturned" xml:space="preserve">
     <value>画像が返されませんでした。</value>

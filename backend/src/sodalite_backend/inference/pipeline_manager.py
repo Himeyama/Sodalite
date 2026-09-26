@@ -8,6 +8,7 @@ from pathlib import Path
 
 import torch
 from diffusers import (
+    AnimaModularPipeline,
     AutoPipelineForImage2Image,
     AutoPipelineForText2Image,
     DiffusionPipeline,
@@ -17,6 +18,7 @@ from diffusers import (
 )
 from PIL import Image
 
+from sodalite_backend.inference.anima import is_anima_checkpoint, load_anima_pipeline
 from sodalite_backend.inference.krea2 import is_krea2_checkpoint, load_krea2_pipeline
 from sodalite_backend.inference.prompt_weights import (
     apply_attention_weights,
@@ -27,6 +29,7 @@ from sodalite_backend.inference.samplers import SAMPLER_CLASSES
 from sodalite_backend.schemas.generation import LoraSpec, Sampler
 
 logger = logging.getLogger(__name__)
+type TextToImagePipeline = DiffusionPipeline | AnimaModularPipeline
 
 
 class ModelNotReadyError(Exception):
@@ -79,7 +82,7 @@ class PipelineManager:
         self.load_stage: str | None = None
         self.download_source: str | None = None
         self.download_destination: str | None = None
-        self._pipeline: DiffusionPipeline | None = None
+        self._pipeline: TextToImagePipeline | None = None
         self._image_to_image_pipeline: DiffusionPipeline | None = None
 
     @property
@@ -129,12 +132,12 @@ class PipelineManager:
         if self.device_backend in {"cuda", "rocm"}:
             torch.cuda.empty_cache()
 
-    def _require_pipeline(self) -> DiffusionPipeline:
+    def _require_pipeline(self) -> TextToImagePipeline:
         if self._pipeline is None:
             raise ModelNotReadyError("No model has finished loading yet.")
         return self._pipeline
 
-    def _load_pipeline(self, model_id: str) -> DiffusionPipeline:
+    def _load_pipeline(self, model_id: str) -> TextToImagePipeline:
         dtype = (
             torch.float16
             if self.device_backend in {"cuda", "rocm", "directml"}
@@ -144,6 +147,15 @@ class PipelineManager:
         if Path(model_id).is_file():
             if is_krea2_checkpoint(model_id):
                 return load_krea2_pipeline(model_id, self.device, self._set_load_stage)
+            if is_anima_checkpoint(model_id):
+                # Anima's BF16 weights and Qwen Image VAE can overflow in FP16,
+                # producing an all-black image after postprocessing.
+                anima_dtype = (
+                    torch.bfloat16
+                    if self.device_backend in {"cuda", "rocm"} and torch.cuda.is_bf16_supported()
+                    else torch.float32
+                )
+                return load_anima_pipeline(model_id, self.device, anima_dtype, self._set_load_stage)
             return self._load_single_file_pipeline(model_id, dtype)
 
         return AutoPipelineForText2Image.from_pretrained(model_id, torch_dtype=dtype).to(
@@ -167,10 +179,10 @@ class PipelineManager:
                 model_path, torch_dtype=dtype, safety_checker=None
             ).to(self.device)
 
-    def set_sampler(self, sampler: Sampler, pipeline: DiffusionPipeline | None = None) -> None:
+    def set_sampler(self, sampler: Sampler, pipeline: TextToImagePipeline | None = None) -> None:
         pipeline = pipeline or self._require_pipeline()
-        if isinstance(pipeline, Krea2Pipeline):
-            return  # Krea 2 uses its own flow-matching Euler scheduler.
+        if isinstance(pipeline, (Krea2Pipeline, AnimaModularPipeline)):
+            return  # These model families use their own flow-matching schedulers.
         scheduler_cls = SAMPLER_CLASSES[sampler]
         pipeline.scheduler = scheduler_cls.from_config(pipeline.scheduler.config)
 
@@ -204,6 +216,34 @@ class PipelineManager:
                     continue
                 adapter_names.append(name)
                 adapter_weights.append(lora.weight)
+            if adapter_names:
+                pipeline.set_adapters(adapter_names, adapter_weights=adapter_weights)
+            return
+
+        if isinstance(pipeline, AnimaModularPipeline):
+            adapter_names = []
+            adapter_weights = []
+            for index, lora in enumerate(loras):
+                name = f"lora_{index}"
+                try:
+                    pipeline.load_lora_weights(lora.model_id, adapter_name=name)
+                except (ValueError, RuntimeError, KeyError, IndexError, OSError) as error:
+                    with contextlib.suppress(ValueError, KeyError):
+                        pipeline.delete_adapters(name)
+                    logger.warning("Skipping incompatible Anima LoRA %s: %s", lora.model_id, error)
+                    continue
+
+                registered = {
+                    adapter
+                    for adapters in pipeline.get_list_adapters().values()
+                    for adapter in adapters
+                }
+                if name not in registered:
+                    logger.warning("Skipping LoRA %s: no Anima adapter was registered", lora.model_id)
+                    continue
+                adapter_names.append(name)
+                adapter_weights.append(lora.weight)
+
             if adapter_names:
                 pipeline.set_adapters(adapter_names, adapter_weights=adapter_weights)
             return
@@ -291,8 +331,11 @@ class PipelineManager:
 
     def _get_image_to_image_pipeline(self) -> DiffusionPipeline:
         """Adapt the loaded model without a second checkpoint load or VRAM copy."""
-        if isinstance(self._require_pipeline(), Krea2Pipeline):
+        pipeline = self._require_pipeline()
+        if isinstance(pipeline, Krea2Pipeline):
             raise ValueError("Krea 2 Turbo currently supports text-to-image only.")
+        if isinstance(pipeline, AnimaModularPipeline):
+            raise ValueError("Anima currently supports text-to-image only.")
         if self._image_to_image_pipeline is None:
             self._image_to_image_pipeline = AutoPipelineForImage2Image.from_pipe(
                 self._require_pipeline()
@@ -390,7 +433,11 @@ class PipelineManager:
             self._get_image_to_image_pipeline() if initial_image is not None else self._require_pipeline()
         )
         is_krea2 = isinstance(pipeline, Krea2Pipeline)
+        is_anima = isinstance(pipeline, AnimaModularPipeline)
         self.set_sampler(sampler, pipeline)
+
+        if is_anima:
+            pipeline.guider.guidance_scale = cfg_scale
 
         if loras:
             self._apply_loras(loras)
@@ -434,16 +481,46 @@ class PipelineManager:
                         if seed is not None
                         else None
                     )
+                elif is_anima and (
+                    has_attention_syntax(prompt) or has_attention_syntax(negative_prompt)
+                ):
+                    arguments["prompt"] = "".join(
+                        fragment.text for fragment in parse_prompt_attention(prompt)
+                    )
+                    arguments["negative_prompt"] = "".join(
+                        fragment.text for fragment in parse_prompt_attention(negative_prompt)
+                    ) or None
                 elif has_attention_syntax(prompt) or has_attention_syntax(negative_prompt):
                     arguments.pop("prompt")
                     arguments.pop("negative_prompt")
                     arguments.update(
                         self._weighted_prompt_arguments(pipeline, prompt, negative_prompt, cfg_scale)
                     )
+                if is_anima:
+                    arguments.pop("guidance_scale")
+                    arguments.pop("callback_on_step_end")
                 if initial_image is not None:
                     arguments["image"] = initial_image
                     arguments["strength"] = strength
-                result = pipeline(**arguments)
+                if is_anima and on_step is not None:
+                    scheduler = pipeline.scheduler
+                    original_step = scheduler.step
+                    completed_steps = 0
+
+                    def report_anima_step(*args: object, **kwargs: object) -> object:
+                        nonlocal completed_steps
+                        result = original_step(*args, **kwargs)
+                        completed_steps += 1
+                        on_step(min(completed_steps, steps), steps)
+                        return result
+
+                    scheduler.step = report_anima_step
+                    try:
+                        result = pipeline(**arguments)
+                    finally:
+                        scheduler.step = original_step
+                else:
+                    result = pipeline(**arguments)
                 yield result.images[0]
         finally:
             if loras:

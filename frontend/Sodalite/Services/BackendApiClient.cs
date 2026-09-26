@@ -95,6 +95,8 @@ sealed class BackendApiClient(int port) : IDisposable
     static GenerationResult ToGenerationResult(GenerationJobDto dto) => new(
         dto.JobId,
         dto.Status,
+        dto.CurrentStep,
+        dto.TotalSteps,
         dto.ImagesCompleted,
         dto.TotalImages,
         dto.ImageUrl,
@@ -252,6 +254,8 @@ sealed class BackendApiClient(int port) : IDisposable
     sealed record GenerationJobDto(
         [property: JsonPropertyName("job_id")] string JobId,
         string Status,
+        [property: JsonPropertyName("current_step")] int CurrentStep,
+        [property: JsonPropertyName("total_steps")] int TotalSteps,
         [property: JsonPropertyName("images_completed")] int ImagesCompleted,
         [property: JsonPropertyName("total_images")] int TotalImages,
         [property: JsonPropertyName("image_url")] string? ImageUrl,

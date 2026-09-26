@@ -22,6 +22,7 @@ public sealed partial class MainWindow : Window
     BackendApiClient? _apiClient;
     bool _isChatOpen;
     bool _modelSwitchInProgress;
+    volatile bool _serverStartupStarted;
 
     public MainWindow()
     {
@@ -186,7 +187,14 @@ public sealed partial class MainWindow : Window
         try
         {
             int port = await _backendProcessManager
-                .StartAsync(AppSettings.LastModelId, AppSettings.WebUiEnabled, onSetupProgress: setupProgress)
+                .StartAsync(AppSettings.LastModelId, AppSettings.WebUiEnabled,
+                    onSetupProgress: setupProgress,
+                    onServerStarting: () =>
+                    {
+                        _serverStartupStarted = true;
+                        DispatcherQueue.TryEnqueue(() => _generationPage.SetBackendStartupStage(
+                            ResourceLoader.GetString("Generation_StartupStartingServer")));
+                    })
                 .ConfigureAwait(false);
             _apiClient = new BackendApiClient(port);
 
@@ -221,7 +229,14 @@ public sealed partial class MainWindow : Window
     // 以降は uv sync のログ行を実況表示する。Progress<string> 経由なので UI スレッドで呼ばれる。
     void ReportEnvironmentSetup(string logLine)
     {
+        if (_serverStartupStarted)
+        {
+            return;
+        }
+
         SetupOverlay.Visibility = Visibility.Visible;
+        _generationPage.SetBackendStartupStage(
+            ResourceLoader.GetString("Generation_StartupPreparingEnvironment"));
 
         if (!string.IsNullOrEmpty(logLine))
         {

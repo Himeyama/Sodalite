@@ -2,6 +2,9 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+import torch
+
 from sodalite_backend.inference.pipeline_manager import PipelineManager, _select_device
 from sodalite_backend.schemas.generation import LoraSpec
 
@@ -104,6 +107,38 @@ def test_load_model_falls_back_to_sd15_when_sdxl_load_fails(tmp_path) -> None:
 
         mock_sd15.from_single_file.assert_called_once()
         assert manager.model_id == str(checkpoint)
+
+
+@pytest.mark.parametrize(
+    ("backend", "bf16_supported", "expected_dtype"),
+    [
+        ("rocm", True, torch.bfloat16),
+        ("cuda", False, torch.float32),
+        ("directml", False, torch.float32),
+    ],
+)
+def test_anima_uses_safe_precision(tmp_path, backend, bf16_supported, expected_dtype) -> None:
+    manager = _make_manager()
+    manager.device_backend = backend
+    checkpoint = tmp_path / "anima.safetensors"
+    checkpoint.write_bytes(b"checkpoint")
+
+    with (
+        patch(
+            "sodalite_backend.inference.pipeline_manager.is_krea2_checkpoint", return_value=False
+        ),
+        patch(
+            "sodalite_backend.inference.pipeline_manager.is_anima_checkpoint", return_value=True
+        ),
+        patch(
+            "sodalite_backend.inference.pipeline_manager.torch.cuda.is_bf16_supported",
+            return_value=bf16_supported,
+        ),
+        patch("sodalite_backend.inference.pipeline_manager.load_anima_pipeline") as load_anima,
+    ):
+        manager._load_pipeline(str(checkpoint))
+
+    assert load_anima.call_args.args[:3] == (str(checkpoint), manager.device, expected_dtype)
 
 
 def test_generate_loads_and_activates_loras_by_weight() -> None:

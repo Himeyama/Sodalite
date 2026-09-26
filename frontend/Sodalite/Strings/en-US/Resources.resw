@@ -231,8 +231,20 @@
   <data name="Generation_BatchSizeLabel.Text" xml:space="preserve">
     <value>Batch size</value>
   </data>
-  <data name="Generation_BackendStarting" xml:space="preserve">
-    <value>Backend starting...</value>
+  <data name="Generation_BackendStartingStage" xml:space="preserve">
+    <value>Backend starting... ({0})</value>
+  </data>
+  <data name="Generation_StartupPreparing" xml:space="preserve">
+    <value>preparing startup</value>
+  </data>
+  <data name="Generation_StartupPreparingEnvironment" xml:space="preserve">
+    <value>preparing Python and dependencies</value>
+  </data>
+  <data name="Generation_StartupStartingServer" xml:space="preserve">
+    <value>waiting for the server</value>
+  </data>
+  <data name="Generation_StartupLoadingModel" xml:space="preserve">
+    <value>loading the model</value>
   </data>
   <data name="Generation_GenerateButtonLabel" xml:space="preserve">
     <value>Generate</value>
@@ -247,10 +259,10 @@
     <value>Seed must be an integer.</value>
   </data>
   <data name="Generation_Generating" xml:space="preserve">
-    <value>Generating... ({0:F1}s)</value>
+    <value>Generating... step {0}/{1} ({2:F0}%) · {3:F1}s ({4} s/step)</value>
   </data>
   <data name="Generation_GeneratingBatch" xml:space="preserve">
-    <value>Generating... {0}/{1} ({2:F1} s, {3:F1} s, {4:F1} s/image)</value>
+    <value>Generating... image {0}/{1} · step {2}/{3} ({4:F0}%) · {5:F1}s ({8} s/step, total {6:F1}s, avg {7:F1}s/image)</value>
   </data>
   <data name="Generation_NoImageReturned" xml:space="preserve">
     <value>No image returned.</value>

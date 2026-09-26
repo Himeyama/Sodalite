@@ -40,11 +40,13 @@ sealed class BackendProcessManager : IAsyncDisposable
         string? modelId = null,
         bool enableWebUi = false,
         IProgress<string>? onSetupProgress = null,
+        Action? onServerStarting = null,
         CancellationToken ct = default)
     {
         // uv run の前に、Python 仮想環境が用意済みであることを保証する。未セットアップ or 前回失敗なら
         // ここで uv sync を実行する(成功時のみマーカーが書かれ、失敗時は次回起動で再試行される)。
         await _environmentSetup.EnsureAsync(onSetupProgress, ct).ConfigureAwait(false);
+        onServerStarting?.Invoke();
 
         Port = enableWebUi ? WebUiPort : FindFreePort();
         WebUiUrl = enableWebUi ? $"http://{FindLanIPAddress()}:{Port}" : null;

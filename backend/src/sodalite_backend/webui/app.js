@@ -198,6 +198,21 @@ async function loadHealth() {
 
 function applyModelDefaults(modelId, force = false) {
   const isKrea2 = /^krea2/i.test(modelDisplayName(modelId));
+  const isAnima = /anima/i.test(modelDisplayName(modelId));
+  if (isAnima && (force || modelId !== activeModelId)) {
+    els.steps.value = "30";
+    els.stepsOut.textContent = "30";
+  }
+  if (isAnima && (force || !/anima/i.test(modelDisplayName(activeModelId)))) {
+    els.cfg.value = "4";
+    els.cfgOut.textContent = "4.0";
+    els.sampler.value = "euler";
+    els.width.value = "1024";
+    els.height.value = "1024";
+    initialImageBase64 = null;
+    els.sourceImage.value = "";
+    els.sourceImageName.textContent = "画像は選択されていません";
+  }
   if (isKrea2 && (force || !/^krea2/i.test(modelDisplayName(activeModelId)))) {
     els.steps.value = "8";
     els.stepsOut.textContent = "8";
@@ -211,7 +226,9 @@ function applyModelDefaults(modelId, force = false) {
     els.sourceImageName.textContent = "画像は選択されていません";
     els.strength.disabled = true;
   }
-  els.sourceImage.disabled = isKrea2;
+  const imageToImageUnavailable = isKrea2 || isAnima;
+  els.sourceImage.disabled = imageToImageUnavailable;
+  els.strength.disabled = imageToImageUnavailable || initialImageBase64 === null;
 }
 
 function modelDisplayName(modelId) {
@@ -550,7 +567,9 @@ function setGenerating(active) {
   els.generate.disabled = active;
   els.cancel.hidden = !active;
   els.cancel.disabled = false;
-  els.sourceImage.disabled = active || /^krea2/i.test(modelDisplayName(activeModelId));
+  const imageToImageUnavailable =
+    /^krea2/i.test(modelDisplayName(activeModelId)) || /anima/i.test(modelDisplayName(activeModelId));
+  els.sourceImage.disabled = active || imageToImageUnavailable;
   els.strength.disabled = active || initialImageBase64 === null;
 }
 

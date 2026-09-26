@@ -27,6 +27,8 @@ public sealed partial class GenerationPage : Page
     readonly GenerationViewModel _viewModel;
     BackendApiClient? _apiClient;
     bool _isKrea2;
+    bool _isAnima;
+    string? _loadedModelId;
 
     int _backendStartingSpinnerIndex;
     double _skeletonAspectRatio = 1.0;
@@ -59,13 +61,12 @@ public sealed partial class GenerationPage : Page
 
         GenerateButton.IsEnabled = false;
 
-        string backendStartingText = ResourceLoader.GetString("Generation_BackendStarting");
         _backendStartingSpinnerTimer = DispatcherQueue.CreateTimer();
         _backendStartingSpinnerTimer.Interval = TimeSpan.FromMilliseconds(80);
         _backendStartingSpinnerTimer.Tick += (_, _) =>
         {
             _backendStartingSpinnerIndex = (_backendStartingSpinnerIndex + 1) % BrailleSpinnerFrames.Length;
-            GenerateButton.Content = $"{BrailleSpinnerFrames[_backendStartingSpinnerIndex]} {backendStartingText}";
+            GenerateButton.Content = $"{BrailleSpinnerFrames[_backendStartingSpinnerIndex]} {_viewModel.StatusText}";
         };
         _backendStartingSpinnerTimer.Start();
     }
@@ -76,6 +77,8 @@ public sealed partial class GenerationPage : Page
         StatusChanged?.Invoke(this, _viewModel.StatusText);
         DeviceInfoChanged?.Invoke(this, _viewModel.DeviceInfo);
     }
+
+    internal void SetBackendStartupStage(string stage) => _viewModel.SetBackendStartupStage(stage);
 
     internal void AttachBackend(BackendApiClient apiClient)
     {
@@ -91,6 +94,11 @@ public sealed partial class GenerationPage : Page
         HealthInfo health = await _viewModel.RefreshDeviceInfoAsync(apiClient, CancellationToken.None);
         bool isKrea2 = Path.GetFileName(health.LoadedModel ?? "")
             .StartsWith("krea2", StringComparison.OrdinalIgnoreCase);
+        bool isAnima = health.LoadedModel?.Contains("anima", StringComparison.OrdinalIgnoreCase) == true;
+        if (isAnima && !string.Equals(health.LoadedModel, _loadedModelId, StringComparison.OrdinalIgnoreCase))
+        {
+            StepsSlider.Value = 30;
+        }
         if (isKrea2 && !_isKrea2)
         {
             StepsSlider.Value = 8;
@@ -103,8 +111,21 @@ public sealed partial class GenerationPage : Page
             ClearImageButton.IsEnabled = false;
             StrengthSlider.IsEnabled = false;
         }
+        if (isAnima && !_isAnima)
+        {
+            CfgScaleSlider.Value = 4;
+            SamplerComboBox.SelectedItem = "euler";
+            WidthNumberBox.Value = 1024;
+            HeightNumberBox.Value = 1024;
+            _viewModel.InitialImage = null;
+            SelectedImageTextBlock.Text = ResourceLoader.GetString("Generation_NoImageSelected/Text");
+            ClearImageButton.IsEnabled = false;
+            StrengthSlider.IsEnabled = false;
+        }
         _isKrea2 = isKrea2;
-        SelectImageButton.IsEnabled = !isKrea2 && !_viewModel.IsGenerating;
+        _isAnima = isAnima;
+        _loadedModelId = health.LoadedModel;
+        SelectImageButton.IsEnabled = !isKrea2 && !isAnima && !_viewModel.IsGenerating;
     }
 
     /// <summary>llama.cpp の稼働確認とモデル一覧取得を開始する。失敗時はチャットを表示しない。</summary>
@@ -252,7 +273,7 @@ public sealed partial class GenerationPage : Page
                 GenerateButton.Visibility = _viewModel.IsGenerating ? Visibility.Collapsed : Visibility.Visible;
                 CancelButton.Visibility = _viewModel.IsGenerating ? Visibility.Visible : Visibility.Collapsed;
                 CancelButton.IsEnabled = _viewModel.IsGenerating;
-                SelectImageButton.IsEnabled = !_isKrea2 && !_viewModel.IsGenerating;
+                SelectImageButton.IsEnabled = !_isKrea2 && !_isAnima && !_viewModel.IsGenerating;
                 ClearImageButton.IsEnabled = !_viewModel.IsGenerating && _viewModel.InitialImage is not null;
                 UpdateResultAreaVisibility();
                 break;

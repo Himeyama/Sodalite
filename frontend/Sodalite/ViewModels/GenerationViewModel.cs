@@ -27,6 +27,8 @@ sealed class GenerationViewModel : INotifyPropertyChanged
     string? _runningJobId;
     int _batchImagesCompleted;
     int _batchTotalImages;
+    int _currentStep;
+    int _totalSteps;
     string _prompt = "";
     string _negativePrompt = "";
     int _steps = 20;
@@ -38,7 +40,7 @@ sealed class GenerationViewModel : INotifyPropertyChanged
     string _seedText = "";
     string? _initialImage;
     double _strength = 0.4;
-    string _statusText = ResourceLoader.GetString("Generation_BackendStarting");
+    string _statusText = FormatBackendStartupStatus(ResourceLoader.GetString("Generation_StartupPreparing"));
     bool _isGenerating;
     bool _isBackendReady;
     BitmapImage? _resultImage;
@@ -58,18 +60,25 @@ sealed class GenerationViewModel : INotifyPropertyChanged
         _generatingElapsedTimer.Tick += (_, _) => UpdateGeneratingStatusText();
     }
 
-    /// <summary>生成中のステータス文言を組み立てる。バッチ枚数が1のときは単純な経過秒数のみ、
-    /// 2枚以上のときは現在の番号・現在の画像の経過秒・バッチ全体の累計秒・平均秒を表示する。</summary>
+    /// <summary>生成中のステップ進捗、経過秒数、完了ステップあたりの平均秒数を表示する。</summary>
     void UpdateGeneratingStatusText()
     {
+        int totalSteps = Math.Max(1, _totalSteps);
+        int currentStep = Math.Clamp(_currentStep, 0, totalSteps);
+        double percent = 100.0 * currentStep / totalSteps;
+        double currentImageSeconds = _generatingStopwatch.Elapsed.TotalSeconds;
+        string secondsPerStep = currentStep > 0
+            ? (currentImageSeconds / currentStep).ToString("F2")
+            : "—";
+
         if (_batchTotalImages <= 1)
         {
-            StatusText = string.Format(ResourceLoader.GetString("Generation_Generating"), _generatingStopwatch.Elapsed.TotalSeconds);
+            StatusText = string.Format(ResourceLoader.GetString("Generation_Generating"),
+                currentStep, totalSteps, percent, currentImageSeconds, secondsPerStep);
             return;
         }
 
         int currentImageNumber = Math.Min(_batchImagesCompleted + 1, _batchTotalImages);
-        double currentImageSeconds = _generatingStopwatch.Elapsed.TotalSeconds;
         double totalSeconds = _batchStopwatch.Elapsed.TotalSeconds;
         double averageSeconds = _batchImagesCompleted > 0 ? totalSeconds / _batchImagesCompleted : currentImageSeconds;
 
@@ -77,9 +86,13 @@ sealed class GenerationViewModel : INotifyPropertyChanged
             ResourceLoader.GetString("Generation_GeneratingBatch"),
             currentImageNumber,
             _batchTotalImages,
+            currentStep,
+            totalSteps,
+            percent,
             currentImageSeconds,
             totalSeconds,
-            averageSeconds);
+            averageSeconds,
+            secondsPerStep);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -158,6 +171,11 @@ sealed class GenerationViewModel : INotifyPropertyChanged
         set => SetField(ref _statusText, value);
     }
 
+    public void SetBackendStartupStage(string stage) => StatusText = FormatBackendStartupStatus(stage);
+
+    static string FormatBackendStartupStatus(string stage) =>
+        string.Format(ResourceLoader.GetString("Generation_BackendStartingStage"), stage);
+
     public bool IsGenerating
     {
         get => _isGenerating;
@@ -229,6 +247,10 @@ sealed class GenerationViewModel : INotifyPropertyChanged
                 {
                     throw new InvalidOperationException(health.ModelError);
                 }
+                string stage = string.IsNullOrWhiteSpace(health.ModelLoadingStage)
+                    ? ResourceLoader.GetString("Generation_StartupLoadingModel")
+                    : health.ModelLoadingStage;
+                _dispatcherQueue.TryEnqueue(() => SetBackendStartupStage(stage));
                 await Task.Delay(PollInterval, ct).ConfigureAwait(false);
                 health = await apiClient.GetHealthAsync(ct).ConfigureAwait(false);
             }
@@ -275,7 +297,11 @@ sealed class GenerationViewModel : INotifyPropertyChanged
         IsGenerating = true;
         _batchImagesCompleted = 0;
         _batchTotalImages = BatchSize;
-        StatusText = string.Format(ResourceLoader.GetString("Generation_Generating"), 0.0);
+        _currentStep = 0;
+        _totalSteps = Steps;
+        _generatingStopwatch.Reset();
+        _batchStopwatch.Reset();
+        UpdateGeneratingStatusText();
 
         try
         {
@@ -347,6 +373,8 @@ sealed class GenerationViewModel : INotifyPropertyChanged
         while (true)
         {
             GenerationResult result = await apiClient.GetGenerationJobAsync(jobId, ct).ConfigureAwait(false);
+            _currentStep = result.CurrentStep;
+            _totalSteps = result.TotalSteps;
 
             if (result.ImagesCompleted > lastImagesCompleted && result.ImageUrl is string imageUrl)
             {
@@ -361,22 +389,28 @@ sealed class GenerationViewModel : INotifyPropertyChanged
             switch (result.Status)
             {
                 case "completed":
-                    if (_batchTotalImages <= 1)
+                    // 画像完成時に現在の画像の時計をリセットするため、全体の時計を使う。
+                    double doneSeconds = _batchStopwatch.Elapsed.TotalSeconds;
+                    _dispatcherQueue.TryEnqueue(() =>
                     {
-                        // 画像完成のたびにリセットされる _generatingStopwatch ではなく、
-                        // バッチ開始からの累計を持つ _batchStopwatch を使う。1枚しかない
-                        // バッチでは画像完成直後にリセットが起き、_generatingStopwatch は
-                        // ほぼ 0 秒になってしまうため。
-                        double doneSeconds = _batchStopwatch.Elapsed.TotalSeconds;
-                        _dispatcherQueue.TryEnqueue(() => StatusText = string.Format(ResourceLoader.GetString("Generation_Done"), doneSeconds));
-                    }
+                        _generatingElapsedTimer.Stop();
+                        StatusText = string.Format(ResourceLoader.GetString("Generation_Done"), doneSeconds);
+                    });
 
                     return;
                 case "cancelled":
-                    _dispatcherQueue.TryEnqueue(() => StatusText = ResourceLoader.GetString("Generation_Cancelled"));
+                    _dispatcherQueue.TryEnqueue(() =>
+                    {
+                        _generatingElapsedTimer.Stop();
+                        StatusText = ResourceLoader.GetString("Generation_Cancelled");
+                    });
                     return;
                 case "failed":
-                    _dispatcherQueue.TryEnqueue(() => StatusText = string.Format(ResourceLoader.GetString("Generation_Error"), result.Error));
+                    _dispatcherQueue.TryEnqueue(() =>
+                    {
+                        _generatingElapsedTimer.Stop();
+                        StatusText = string.Format(ResourceLoader.GetString("Generation_Error"), result.Error);
+                    });
                     return;
             }
 

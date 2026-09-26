@@ -9,7 +9,7 @@ namespace Sodalite.Services;
 
 /// <summary>
 /// バックエンドの Python 仮想環境(.venv)を初回起動時に用意する。
-/// <c>uv sync</c> を実行して依存をインストールし、成功を <c>%LOCALAPPDATA%\Sodalite\.venv-ready</c>
+/// <c>uv sync</c> を実行して依存をインストールし、成功を各仮想環境内の <c>.sodalite-ready</c>
 /// マーカーに記録する。マーカーには依存関係部分の uv.lock のハッシュを書き込み、依存が変わったら再セットアップする。
 /// セットアップが失敗した場合はマーカーを書かないため、次回起動時に自動的に再試行される。
 /// </summary>
@@ -24,12 +24,9 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
     const string BackendPackageName = "sodalite-backend";
     const string ProjectVersionPlaceholder = "<project-version>";
 
-    static readonly string MarkerFilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Sodalite",
-        ".venv-ready");
-
     readonly string _backendProjectPath = backendProjectPath;
+    string VenvPath => BackendLocator.VenvPath ?? Path.Combine(_backendProjectPath, ".venv");
+    string MarkerFilePath => Path.Combine(VenvPath, ".sodalite-ready");
 
     public string Accelerator { get; } = DetectAccelerator();
 
@@ -69,8 +66,7 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
 
     async Task RemoveDirectMlTorchvisionAsync(CancellationToken ct)
     {
-        string venvPath = BackendLocator.VenvPath ?? Path.Combine(_backendProjectPath, ".venv");
-        string pythonPath = Path.Combine(venvPath, "Scripts", "python.exe");
+        string pythonPath = Path.Combine(VenvPath, "Scripts", "python.exe");
         ProcessStartInfo startInfo = new()
         {
             FileName = "uv",
@@ -303,7 +299,7 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
                         "Radeon PRO W7900",
                         "Radeon RX 7700",
                     ];
-                    hasRocmAdapter = supportedRocmAdapters.Any(
+                    hasRocmAdapter |= supportedRocmAdapters.Any(
                         name => description.Contains(name, StringComparison.OrdinalIgnoreCase));
                 }
             }
@@ -316,7 +312,7 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
         return hasRocmAdapter ? "rocm" : hasAmdAdapter ? "directml" : "cpu";
     }
 
-    static void WriteMarker(string lockHash)
+    void WriteMarker(string lockHash)
     {
         string? directory = Path.GetDirectoryName(MarkerFilePath);
         if (directory is not null)
