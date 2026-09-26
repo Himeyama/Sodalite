@@ -99,12 +99,33 @@ sealed class BackendEnvironmentSetup(string backendProjectPath)
     {
         try
         {
-            return File.ReadAllText(MarkerFilePath).Trim() == currentLockHash;
+            return File.ReadAllText(MarkerFilePath).Trim() == currentLockHash
+                && HasExpectedAcceleratorPackage();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return false;
         }
+    }
+
+    bool HasExpectedAcceleratorPackage()
+    {
+        string sitePackages = Path.Combine(VenvPath, "Lib", "site-packages");
+        if (!Directory.Exists(sitePackages))
+        {
+            return false;
+        }
+
+        // An earlier uv run without the selected extra could replace ROCm/CUDA
+        // PyTorch with the CPU wheel while leaving the ready marker intact.
+        string packagePattern = Accelerator switch
+        {
+            "rocm" => "torch-*+rocm*.dist-info",
+            "cuda" => "torch-*+cu*.dist-info",
+            "directml" => "torch_directml-*.dist-info",
+            _ => "torch-*.dist-info",
+        };
+        return Directory.EnumerateDirectories(sitePackages, packagePattern).Any();
     }
 
     string ComputeDependencyLockHash()
