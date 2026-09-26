@@ -41,7 +41,9 @@
                     </Button>
                 </StackPanel>
                 <TextBox x:Name="PromptTextBox" x:Uid="Generation_PromptTextBox" AcceptsReturn="True" Height="100" FontSize="18"
-                         TextWrapping="Wrap" />
+                         TextWrapping="Wrap" PreviewKeyDown="PromptTextBox_KeyDown"
+                         TextCompositionStarted="PromptTextBox_TextCompositionStarted"
+                         TextCompositionEnded="PromptTextBox_TextCompositionEnded" />
 
                 <StackPanel Orientation="Horizontal" Spacing="4">
                     <TextBlock x:Uid="Generation_NegativePromptLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />
@@ -56,7 +58,9 @@
                     </Button>
                 </StackPanel>
                 <TextBox x:Name="NegativePromptTextBox" x:Uid="Generation_NegativePromptTextBox" AcceptsReturn="True" Height="70" FontSize="18"
-                         TextWrapping="Wrap" />
+                         TextWrapping="Wrap" PreviewKeyDown="PromptTextBox_KeyDown"
+                         TextCompositionStarted="PromptTextBox_TextCompositionStarted"
+                         TextCompositionEnded="PromptTextBox_TextCompositionEnded" />
 
                 <StackPanel Spacing="4">
                     <TextBlock x:Uid="Generation_SourceImageLabel" Style="{ThemeResource BodyStrongTextBlockStyle}" />

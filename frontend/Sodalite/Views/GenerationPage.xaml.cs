@@ -2,9 +2,11 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices.WindowsRuntime;
+using Microsoft.UI.Input;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.Windows.ApplicationModel.Resources;
 using Sodalite.Models;
 using Sodalite.Services;
@@ -13,6 +15,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
+using VirtualKey = Windows.System.VirtualKey;
 using WinRT.Interop;
 
 namespace Sodalite.Views;
@@ -28,6 +31,7 @@ public sealed partial class GenerationPage : Page
     BackendApiClient? _apiClient;
     bool _isKrea2;
     bool _isAnima;
+    bool _isPromptComposing;
     string? _loadedModelId;
 
     int _backendStartingSpinnerIndex;
@@ -291,7 +295,34 @@ public sealed partial class GenerationPage : Page
         }
     }
 
-    async void GenerateButton_Click(object sender, RoutedEventArgs e)
+    async void PromptTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != VirtualKey.Enter || e.KeyStatus.IsMenuKeyDown || IsShiftKeyDown()
+            || _isPromptComposing)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (GenerateButton.IsEnabled)
+        {
+            await GenerateFromControlsAsync();
+        }
+    }
+
+    static bool IsShiftKeyDown() =>
+        (InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+            & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+
+    void PromptTextBox_TextCompositionStarted(TextBox sender, TextCompositionStartedEventArgs args) =>
+        _isPromptComposing = true;
+
+    void PromptTextBox_TextCompositionEnded(TextBox sender, TextCompositionEndedEventArgs args) =>
+        _isPromptComposing = false;
+
+    async void GenerateButton_Click(object sender, RoutedEventArgs e) => await GenerateFromControlsAsync();
+
+    async Task GenerateFromControlsAsync()
     {
         _viewModel.Prompt = PromptTextBox.Text;
         _viewModel.NegativePrompt = NegativePromptTextBox.Text;

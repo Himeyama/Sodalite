@@ -967,6 +967,17 @@ function wireEvents() {
   });
   els.generate.addEventListener("click", onGenerate);
   els.cancel.addEventListener("click", onCancel);
+  for (const promptInput of [els.prompt, els.negativePrompt]) {
+    promptInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) {
+        return;
+      }
+      event.preventDefault();
+      if (!els.generate.disabled) {
+        onGenerate();
+      }
+    });
+  }
 
   // プロンプト等はブラウザ更新後も残るよう、変更のたびに保存する。
   for (const el of [
