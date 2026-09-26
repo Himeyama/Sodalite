@@ -101,6 +101,11 @@ public sealed partial class MainWindow : Window
     /// </summary>
     async Task SlideToPageAsync(UIElement incoming, bool reverse)
     {
+        if (RootHost.Children.Contains(incoming))
+        {
+            return;
+        }
+
         UIElement? outgoing = RootHost.Children.Count > 0 ? RootHost.Children[^1] : null;
 
         double fromX = reverse ? -SlideOffset : SlideOffset;
@@ -259,6 +264,11 @@ public sealed partial class MainWindow : Window
     async void GalleryButton_Click(object sender, RoutedEventArgs e)
     {
         if (_apiClient is not BackendApiClient apiClient)
+        {
+            return;
+        }
+
+        if (RootHost.Children.Contains(_galleryPage))
         {
             return;
         }
