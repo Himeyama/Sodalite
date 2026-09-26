@@ -58,7 +58,8 @@
                 Padding="16,8">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto">
                 <TextBlock x:Name="StatusBarTextBlock" Grid.Column="0"
-                           Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.7" />
+                           Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.7"
+                           TextWrapping="Wrap" />
 
                 <Button x:Name="SkeletonScreenToggleButton" Grid.Column="1"
                         x:Uid="MainWindow_SkeletonScreenToggleButton"

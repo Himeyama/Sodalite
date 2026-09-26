@@ -21,6 +21,7 @@ public sealed partial class MainWindow : Window
     readonly DispatcherTimer _systemStatsTimer;
     BackendApiClient? _apiClient;
     bool _isChatOpen;
+    bool _modelSwitchInProgress;
 
     public MainWindow()
     {
@@ -39,7 +40,13 @@ public sealed partial class MainWindow : Window
         // 購読では遷移直後に発火する初期状態イベントを取りこぼすため。インスタンスは保持し、
         // モデル選択ページから戻る際はこのインスタンスへ復帰させて状態を維持する。
         _generationPage = new GenerationPage { OwnerWindow = this };
-        _generationPage.StatusChanged += (_, status) => StatusBarTextBlock.Text = status;
+        _generationPage.StatusChanged += (_, status) =>
+        {
+            if (!_modelSwitchInProgress)
+            {
+                StatusBarTextBlock.Text = status;
+            }
+        };
         _generationPage.DeviceInfoChanged += (_, deviceInfo) => StatusBarDeviceInfoTextBlock.Text = deviceInfo;
         _generationPage.BackendReadyChanged += (_, _) => ModelSelectionButton.IsEnabled = true;
         _generationPage.ChatAvailabilityChanged += GenerationPage_ChatAvailabilityChanged;
@@ -189,9 +196,10 @@ public sealed partial class MainWindow : Window
 
                 // サーバー自体はここで応答可能になっているが、初回モデルはバックグラウンドで
                 // まだ VRAM に展開中のことがある。ギャラリーはモデル不要なので即座に使えるが、
-                // モデル切り替え・生成はロード完了を待つ必要があるため、ModelSelectionButton は
-                // _generationPage.AttachBackend が IsBackendReady を立てるまで無効のままにする。
+                // モデルの読み込みに失敗した場合も別のモデルを選べるようにする。
+                // 読み込み中の切り替えはバックエンドが 503 で拒否する。
                 GalleryButton.IsEnabled = true;
+                ModelSelectionButton.IsEnabled = true;
 
                 _generationPage.AttachBackend(_apiClient);
 
@@ -245,6 +253,13 @@ public sealed partial class MainWindow : Window
         // 状態を維持する。モデル選択ページを右から重ねて横スライドで前面に出す。
         ModelSelectionPage page = new();
         page.ModelSwitched += ModelSelectionPage_ModelSwitched;
+        page.ModelSwitchStatusChanged += (_, status) =>
+        {
+            _modelSwitchInProgress = true;
+            StatusBarTextBlock.Text = status;
+            ToolTipService.SetToolTip(StatusBarTextBlock, status);
+        };
+        page.ModelSwitchFinished += (_, _) => _modelSwitchInProgress = false;
         page.BackRequested += ModelSelectionPage_BackRequested;
         page.Initialize(apiClient, this, _generationPage.SelectedLoras);
         await SlideToPageAsync(page, reverse: false);
@@ -254,6 +269,7 @@ public sealed partial class MainWindow : Window
     {
         if (_apiClient is BackendApiClient apiClient)
         {
+            _generationPage.AttachBackend(apiClient);
             _ = _generationPage.RefreshDeviceInfoAsync(apiClient);
         }
     }

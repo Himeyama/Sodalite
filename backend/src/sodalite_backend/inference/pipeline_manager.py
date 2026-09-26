@@ -2,6 +2,7 @@
 
 import contextlib
 import gc
+import logging
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -10,18 +11,22 @@ from diffusers import (
     AutoPipelineForImage2Image,
     AutoPipelineForText2Image,
     DiffusionPipeline,
+    Krea2Pipeline,
     StableDiffusionPipeline,
     StableDiffusionXLPipeline,
 )
 from PIL import Image
 
-from sodalite_backend.inference.samplers import SAMPLER_CLASSES
+from sodalite_backend.inference.krea2 import is_krea2_checkpoint, load_krea2_pipeline
 from sodalite_backend.inference.prompt_weights import (
     apply_attention_weights,
     has_attention_syntax,
     parse_prompt_attention,
 )
+from sodalite_backend.inference.samplers import SAMPLER_CLASSES
 from sodalite_backend.schemas.generation import LoraSpec, Sampler
+
+logger = logging.getLogger(__name__)
 
 
 class ModelNotReadyError(Exception):
@@ -70,6 +75,10 @@ class PipelineManager:
     def __init__(self) -> None:
         self.device, self.device_backend = _select_device()
         self.model_id: str | None = None
+        self.load_error: str | None = None
+        self.load_stage: str | None = None
+        self.download_source: str | None = None
+        self.download_destination: str | None = None
         self._pipeline: DiffusionPipeline | None = None
         self._image_to_image_pipeline: DiffusionPipeline | None = None
 
@@ -79,9 +88,19 @@ class PipelineManager:
 
     def load_initial_model(self, model_id: str) -> None:
         """Load the first model. Intended to run once, before any `load_model` call."""
-        self._pipeline = self._load_pipeline(model_id)
+        try:
+            self.load_stage = "モデルを読み込み中"
+            self._pipeline = self._load_pipeline(model_id)
+        except Exception as error:
+            self.load_error = str(error)
+            raise
+        finally:
+            self.load_stage = None
+            self.download_source = None
+            self.download_destination = None
         self._image_to_image_pipeline = None
         self.model_id = model_id
+        self.load_error = None
 
     def load_model(self, model_id: str) -> None:
         """Replace the currently loaded pipeline with a different model.
@@ -91,12 +110,19 @@ class PipelineManager:
         explicitly to free the device memory it held, which on CUDA would otherwise
         stay reserved and make the next load run out of VRAM.
         """
-        new_pipeline = self._load_pipeline(model_id)
+        self.load_stage = "モデルを読み込み中"
+        try:
+            new_pipeline = self._load_pipeline(model_id)
+        finally:
+            self.load_stage = None
+            self.download_source = None
+            self.download_destination = None
 
         old_pipeline = self._pipeline
         self._pipeline = new_pipeline
         self._image_to_image_pipeline = None
         self.model_id = model_id
+        self.load_error = None
 
         del old_pipeline
         gc.collect()
@@ -116,11 +142,20 @@ class PipelineManager:
         )
 
         if Path(model_id).is_file():
+            if is_krea2_checkpoint(model_id):
+                return load_krea2_pipeline(model_id, self.device, self._set_load_stage)
             return self._load_single_file_pipeline(model_id, dtype)
 
         return AutoPipelineForText2Image.from_pretrained(model_id, torch_dtype=dtype).to(
             self.device
         )
+
+    def _set_load_stage(
+        self, stage: str, download_source: str | None, download_destination: str | None
+    ) -> None:
+        self.load_stage = stage
+        self.download_source = download_source
+        self.download_destination = download_destination
 
     def _load_single_file_pipeline(self, model_path: str, dtype: torch.dtype) -> DiffusionPipeline:
         try:
@@ -134,6 +169,8 @@ class PipelineManager:
 
     def set_sampler(self, sampler: Sampler, pipeline: DiffusionPipeline | None = None) -> None:
         pipeline = pipeline or self._require_pipeline()
+        if isinstance(pipeline, Krea2Pipeline):
+            return  # Krea 2 uses its own flow-matching Euler scheduler.
         scheduler_cls = SAMPLER_CLASSES[sampler]
         pipeline.scheduler = scheduler_cls.from_config(pipeline.scheduler.config)
 
@@ -146,16 +183,49 @@ class PipelineManager:
         SD1.5 model) fails to load; that one is skipped so the rest still apply
         and generation isn't aborted.
         """
+        pipeline = self._require_pipeline()
+        if isinstance(pipeline, Krea2Pipeline):
+            adapter_names = []
+            adapter_weights = []
+            for index, lora in enumerate(loras):
+                name = f"lora_{index}"
+                try:
+                    pipeline.load_lora_weights(lora.model_id, adapter_name=name)
+                except (ValueError, RuntimeError, KeyError, IndexError, OSError) as error:
+                    with contextlib.suppress(ValueError, KeyError):
+                        pipeline.delete_adapters(name)
+                    logger.warning("Skipping incompatible Krea 2 LoRA %s: %s", lora.model_id, error)
+                    continue
+                if name not in pipeline.get_list_adapters().get("transformer", []):
+                    logger.warning(
+                        "Skipping LoRA %s: no Krea 2 transformer adapter was registered",
+                        lora.model_id,
+                    )
+                    continue
+                adapter_names.append(name)
+                adapter_weights.append(lora.weight)
+            if adapter_names:
+                pipeline.set_adapters(adapter_names, adapter_weights=adapter_weights)
+            return
+
         adapter_names: list[str] = []
         adapter_weights: list[float] = []
         for index, lora in enumerate(loras):
             adapter_name = f"lora_{index}"
             if self._load_single_lora(lora.model_id, adapter_name):
-                adapter_names.append(adapter_name)
-                adapter_weights.append(lora.weight)
+                registered = {
+                    name
+                    for names in pipeline.get_list_adapters().values()
+                    for name in names
+                }
+                if adapter_name in registered:
+                    adapter_names.append(adapter_name)
+                    adapter_weights.append(lora.weight)
+                else:
+                    logger.warning("Skipping LoRA %s: no adapter was registered", lora.model_id)
 
         if adapter_names:
-            self._require_pipeline().set_adapters(adapter_names, adapter_weights=adapter_weights)
+            pipeline.set_adapters(adapter_names, adapter_weights=adapter_weights)
 
     def _load_single_lora(self, model_id: str, adapter_name: str) -> bool:
         """Load one LoRA onto the pipeline, returning whether it was applied.
@@ -221,6 +291,8 @@ class PipelineManager:
 
     def _get_image_to_image_pipeline(self) -> DiffusionPipeline:
         """Adapt the loaded model without a second checkpoint load or VRAM copy."""
+        if isinstance(self._require_pipeline(), Krea2Pipeline):
+            raise ValueError("Krea 2 Turbo currently supports text-to-image only.")
         if self._image_to_image_pipeline is None:
             self._image_to_image_pipeline = AutoPipelineForImage2Image.from_pipe(
                 self._require_pipeline()
@@ -317,6 +389,7 @@ class PipelineManager:
         pipeline = (
             self._get_image_to_image_pipeline() if initial_image is not None else self._require_pipeline()
         )
+        is_krea2 = isinstance(pipeline, Krea2Pipeline)
         self.set_sampler(sampler, pipeline)
 
         if loras:
@@ -353,7 +426,15 @@ class PipelineManager:
                     generator=generator,
                     callback_on_step_end=report_step if on_step is not None else None,
                 )
-                if has_attention_syntax(prompt) or has_attention_syntax(negative_prompt):
+                if is_krea2:
+                    arguments["guidance_scale"] = 0.0
+                    arguments["negative_prompt"] = None
+                    arguments["generator"] = (
+                        torch.Generator(device="cpu").manual_seed(seed + index)
+                        if seed is not None
+                        else None
+                    )
+                elif has_attention_syntax(prompt) or has_attention_syntax(negative_prompt):
                     arguments.pop("prompt")
                     arguments.pop("negative_prompt")
                     arguments.update(

@@ -225,6 +225,10 @@ sealed class GenerationViewModel : INotifyPropertyChanged
             HealthInfo health = await apiClient.GetHealthAsync(ct).ConfigureAwait(false);
             while (!health.ModelReady)
             {
+                if (health.ModelError is not null)
+                {
+                    throw new InvalidOperationException(health.ModelError);
+                }
                 await Task.Delay(PollInterval, ct).ConfigureAwait(false);
                 health = await apiClient.GetHealthAsync(ct).ConfigureAwait(false);
             }
@@ -242,10 +246,11 @@ sealed class GenerationViewModel : INotifyPropertyChanged
         }
     }
 
-    public async Task RefreshDeviceInfoAsync(BackendApiClient apiClient, CancellationToken ct)
+    public async Task<HealthInfo> RefreshDeviceInfoAsync(BackendApiClient apiClient, CancellationToken ct)
     {
         HealthInfo health = await apiClient.GetHealthAsync(ct).ConfigureAwait(false);
         _dispatcherQueue.TryEnqueue(() => DeviceInfo = $"{health.Device} / {DisplayNameFor(health.LoadedModel)}");
+        return health;
     }
 
     static string DisplayNameFor(string? modelId) =>

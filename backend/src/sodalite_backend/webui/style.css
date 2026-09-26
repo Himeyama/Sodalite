@@ -597,9 +597,9 @@ button:disabled {
 .status-text {
   color: var(--muted);
   font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .status-spinner {
@@ -855,7 +855,7 @@ button:disabled {
   }
 
   .status-text {
-    white-space: normal;
+    white-space: pre-line;
   }
 
   /* ライトボックスは縦積みで画像優先。画面端との余白を確保しつつ、

@@ -11,6 +11,11 @@ sealed class BackendApiClient(int port) : IDisposable
         BaseAddress = new Uri($"http://127.0.0.1:{port}"),
         Timeout = TimeSpan.FromMinutes(10),
     };
+    readonly HttpClient _modelSwitchHttp = new()
+    {
+        BaseAddress = new Uri($"http://127.0.0.1:{port}"),
+        Timeout = TimeSpan.FromHours(2),
+    };
 
     /// <summary>サムネイル等、相対URLを完全URLに組み立てる呼び出し元向けに公開する。</summary>
     public Uri BaseAddress => _http.BaseAddress!;
@@ -108,7 +113,8 @@ sealed class BackendApiClient(int port) : IDisposable
         HealthDto dto = await _http.GetFromJsonAsync<HealthDto>("/api/v1/health", ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Empty response from backend.");
 
-        return new HealthInfo(dto.Status, dto.Device, dto.LoadedModel, dto.ModelReady);
+        return new HealthInfo(dto.Status, dto.Device, dto.LoadedModel, dto.ModelReady,
+            dto.ModelError, dto.ModelLoadingStage, dto.ModelDownloadSource, dto.ModelDownloadDestination);
     }
 
     public async Task<List<ModelInfo>> GetModelsAsync(CancellationToken ct)
@@ -119,10 +125,17 @@ sealed class BackendApiClient(int port) : IDisposable
 
     public async Task<ModelInfo> SetActiveModelAsync(string modelId, CancellationToken ct)
     {
-        HttpResponseMessage response = await _http
+        HttpResponseMessage response = await _modelSwitchHttp
             .PostAsJsonAsync("/api/v1/models/active", new SetActiveModelBody(modelId), ct)
             .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            BackendErrorDto? error = await response.Content
+                .ReadFromJsonAsync<BackendErrorDto>(ct)
+                .ConfigureAwait(false);
+            throw new InvalidOperationException(
+                error?.Detail ?? $"Model switch failed ({(int)response.StatusCode}).");
+        }
 
         ModelDto dto = await response.Content
             .ReadFromJsonAsync<ModelDto>(ct)
@@ -202,7 +215,11 @@ sealed class BackendApiClient(int port) : IDisposable
         return new ScanDirectories(dto.ModelDir, dto.LoraDir);
     }
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose()
+    {
+        _http.Dispose();
+        _modelSwitchHttp.Dispose();
+    }
 
     sealed record TextToImageBody(
         string Prompt,
@@ -245,7 +262,11 @@ sealed class BackendApiClient(int port) : IDisposable
         string Status,
         string Device,
         [property: JsonPropertyName("loaded_model")] string? LoadedModel,
-        [property: JsonPropertyName("model_ready")] bool ModelReady);
+        [property: JsonPropertyName("model_ready")] bool ModelReady,
+        [property: JsonPropertyName("model_error")] string? ModelError,
+        [property: JsonPropertyName("model_loading_stage")] string? ModelLoadingStage,
+        [property: JsonPropertyName("model_download_source")] string? ModelDownloadSource,
+        [property: JsonPropertyName("model_download_destination")] string? ModelDownloadDestination);
 
     sealed record GalleryImageDto(
         [property: JsonPropertyName("image_id")] string ImageId,
@@ -273,6 +294,8 @@ sealed class BackendApiClient(int port) : IDisposable
 
     sealed record SetActiveModelBody([property: JsonPropertyName("model_id")] string ModelId);
 
+    sealed record BackendErrorDto(string? Detail);
+
     sealed record LoraDto(
         [property: JsonPropertyName("lora_id")] string LoraId,
         [property: JsonPropertyName("size_on_disk_bytes")] long SizeOnDiskBytes);
@@ -282,6 +305,7 @@ sealed class BackendApiClient(int port) : IDisposable
         [property: JsonPropertyName("lora_dir")] string? LoraDir);
 }
 
-sealed record HealthInfo(string Status, string Device, string? LoadedModel, bool ModelReady);
+sealed record HealthInfo(string Status, string Device, string? LoadedModel, bool ModelReady,
+    string? ModelError, string? ModelLoadingStage, string? ModelDownloadSource, string? ModelDownloadDestination);
 
 sealed record ScanDirectories(string? ModelDir, string? LoraDir);

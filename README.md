@@ -81,6 +81,12 @@ uv sync
 
 初回起動時、バックエンドが Hugging Face から画像生成モデル(既定: `stabilityai/sd-turbo`)を自動ダウンロードする。
 
+### Krea 2 Turbo
+
+モデルフォルダーに `krea2Turbo_v10_bf16.safetensors` などの Krea 2 Turbo 重みを置き、モデル画面から選択する。ComfyUI 形式の scaled FP8 重みも読み込めるが、実行時には BF16 に復元するため、生成時のメモリ使用量や速度は BF16 版とほぼ同じになる。初回選択時には、画像生成に必要な `Qwen/Qwen3-VL-4B-Instruct` テキストエンコーダーと `Qwen/Qwen-Image` VAE が Hugging Face からダウンロードされる。重みファイルは元の場所から読み込み、複製しない。
+
+Turbo の推奨設定は 8 ステップ、CFG 0、Euler、1024×1024。モデル選択時に画面の値が自動設定される。Krea 2 Turbo はテキストからの画像生成に対応し、画像からの生成は使用できない。BF16 の大きなモデルなので、GPU ではテキストエンコーダー・生成器・VAE を順に CPU と GPU 間で入れ替えて実行する。
+
 ### 起動
 
 ```powershell

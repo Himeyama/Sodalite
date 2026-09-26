@@ -27,7 +27,7 @@
             <!-- 左: ベースモデル / 右: LoRA の 2 カラム。 -->
             <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="24">
                 <!-- ベースモデル -->
-                <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
+                <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,*">
                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
                         <TextBlock Grid.Column="0" x:Uid="ModelSelectionDialog_ModelHeader"
                                    Style="{ThemeResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
@@ -44,7 +44,11 @@
                                Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.7"
                                Margin="0,0,0,8" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
 
-                    <Grid Grid.Row="2">
+                    <TextBlock Grid.Row="2" x:Name="ModelLoadStatusTextBlock"
+                               Style="{ThemeResource CaptionTextBlockStyle}" TextWrapping="Wrap"
+                               Margin="0,0,0,8" Visibility="Collapsed" />
+
+                    <Grid Grid.Row="3">
                         <ProgressRing x:Name="LoadingProgressRing" IsActive="False"
                                       HorizontalAlignment="Left" VerticalAlignment="Top" Width="24" Height="24" />
 

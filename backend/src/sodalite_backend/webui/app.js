@@ -64,6 +64,8 @@ const els = {
 
 let runningJobId = null;
 let activeModelId = null;
+let backendReady = false;
+let backendLoadError = null;
 let lightboxImage = null;
 let initialImageBase64 = null;
 
@@ -77,6 +79,7 @@ async function getJson(path) {
 
 function setStatus(text) {
   els.statusTextContent.textContent = text;
+  els.statusTextContent.title = text;
 }
 
 // 点字パターンのフレームを順に表示するスピナー (Braille spinner)。
@@ -182,10 +185,33 @@ async function loadHealth() {
   try {
     const health = await getJson("/health");
     activeModelId = health.loaded_model;
+    backendReady = health.model_ready;
+    backendLoadError = health.model_error;
     els.navModel.textContent = `${health.device} · ${modelDisplayName(health.loaded_model)}`;
+    if (backendLoadError) {
+      setStatus(`モデルの読み込みに失敗しました: ${backendLoadError}`);
+    }
   } catch {
     els.navModel.textContent = "接続できません";
   }
+}
+
+function applyModelDefaults(modelId, force = false) {
+  const isKrea2 = /^krea2/i.test(modelDisplayName(modelId));
+  if (isKrea2 && (force || !/^krea2/i.test(modelDisplayName(activeModelId)))) {
+    els.steps.value = "8";
+    els.stepsOut.textContent = "8";
+    els.cfg.value = "0";
+    els.cfgOut.textContent = "0.0";
+    els.sampler.value = "euler";
+    els.width.value = "1024";
+    els.height.value = "1024";
+    initialImageBase64 = null;
+    els.sourceImage.value = "";
+    els.sourceImageName.textContent = "画像は選択されていません";
+    els.strength.disabled = true;
+  }
+  els.sourceImage.disabled = isKrea2;
 }
 
 function modelDisplayName(modelId) {
@@ -524,7 +550,7 @@ function setGenerating(active) {
   els.generate.disabled = active;
   els.cancel.hidden = !active;
   els.cancel.disabled = false;
-  els.sourceImage.disabled = active;
+  els.sourceImage.disabled = active || /^krea2/i.test(modelDisplayName(activeModelId));
   els.strength.disabled = active || initialImageBase64 === null;
 }
 
@@ -601,6 +627,21 @@ async function switchModel(modelId) {
     return;
   }
   setStatus(`モデルを切り替えています: ${modelDisplayName(modelId)}`);
+  let finished = false;
+  const progress = setInterval(async () => {
+    try {
+      const health = await getJson("/health");
+      if (!finished && health.model_loading_stage) {
+        let status = `モデルを切り替え中: ${modelDisplayName(modelId)} · ${health.model_loading_stage}`;
+        if (health.model_download_source && health.model_download_destination) {
+          status += `\nDL 元: ${health.model_download_source}\n保存先: ${health.model_download_destination}`;
+        }
+        setStatus(status);
+      }
+    } catch {
+      // A temporary health-check failure does not stop the switch.
+    }
+  }, 2000);
   try {
     const res = await fetch(API + "/models/active", {
       method: "POST",
@@ -611,11 +652,16 @@ async function switchModel(modelId) {
       const detail = await res.json().catch(() => null);
       throw new Error(detail?.detail ?? `切り替えに失敗しました (${res.status})`);
     }
+    applyModelDefaults(modelId);
     activeModelId = modelId;
     setStatus(`モデルを切り替えました: ${modelDisplayName(modelId)}`);
     await Promise.all([loadHealth(), loadModels()]);
+    els.generate.disabled = !backendReady;
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error));
+  } finally {
+    finished = true;
+    clearInterval(progress);
   }
 }
 
@@ -973,7 +1019,20 @@ async function init() {
   await loadHealth();
   await Promise.allSettled([loadSamplers(), loadLoras()]);
   restorePromptState();
-  els.generate.disabled = false;
+  applyModelDefaults(activeModelId, true);
+  els.generate.disabled = !backendReady;
+  if (!backendReady) {
+    const readyTimer = setInterval(async () => {
+      await loadHealth();
+      if (backendReady || backendLoadError) {
+        clearInterval(readyTimer);
+        if (backendReady) {
+          applyModelDefaults(activeModelId, true);
+          els.generate.disabled = false;
+        }
+      }
+    }, 1000);
+  }
   await navigateTo(viewFromHash(), { replace: true });
 }
 

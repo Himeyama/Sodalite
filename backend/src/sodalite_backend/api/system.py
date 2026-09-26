@@ -32,6 +32,10 @@ def health(request: Request) -> dict[str, object]:
         "device": pipeline_manager.device_backend,
         "loaded_model": pipeline_manager.model_id,
         "model_ready": pipeline_manager.is_ready,
+        "model_error": pipeline_manager.load_error,
+        "model_loading_stage": pipeline_manager.load_stage,
+        "model_download_source": pipeline_manager.download_source,
+        "model_download_destination": pipeline_manager.download_destination,
     }
 
 
@@ -49,11 +53,11 @@ def models(request: Request) -> list[ModelInfo]:
 @router.post("/models/active")
 def set_active_model(request: Request, body: SetActiveModelRequest) -> ModelInfo:
     pipeline_manager = request.app.state.pipeline_manager
-    if not pipeline_manager.is_ready:
+    if not pipeline_manager.is_ready and pipeline_manager.load_error is None:
         raise HTTPException(status_code=503, detail="The initial model is still loading.")
     try:
         pipeline_manager.load_model(body.model_id)
-    except OSError as error:
+    except Exception as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
     # Remember HF repos the user activates so they keep showing in the list;

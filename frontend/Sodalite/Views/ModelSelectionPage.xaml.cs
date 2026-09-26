@@ -25,6 +25,10 @@ sealed partial class ModelSelectionPage : Page
     /// <summary>モデルの切り替えが成功したときに発火する。オーナー側でデバイス情報を更新する。</summary>
     public event EventHandler? ModelSwitched;
 
+    public event EventHandler<string>? ModelSwitchStatusChanged;
+
+    public event EventHandler? ModelSwitchFinished;
+
     /// <summary>戻る操作が要求されたときに発火する。オーナー側で前の画面へ復帰させる。</summary>
     public event EventHandler? BackRequested;
 
@@ -255,6 +259,11 @@ sealed partial class ModelSelectionPage : Page
         ErrorInfoBar.IsOpen = false;
         ModelListView.IsEnabled = false;
         LoadingProgressRing.IsActive = true;
+        ModelLoadStatusTextBlock.Text = "モデルを読み込み中";
+        ModelLoadStatusTextBlock.Visibility = Visibility.Visible;
+        ModelSwitchStatusChanged?.Invoke(this, $"モデルを切り替え中: {item.DisplayName}");
+        using CancellationTokenSource progressCancellation = new();
+        Task progressTask = PollModelLoadStageAsync(progressCancellation.Token);
 
         try
         {
@@ -264,17 +273,56 @@ sealed partial class ModelSelectionPage : Page
             // モデルを切り替えても選択中の LoRA と重みはそのまま維持する。SD1.5/SDXL の
             // 互換性が合わない LoRA は生成時にバックエンド側でスキップされる。
             ModelSwitched?.Invoke(this, EventArgs.Empty);
+            ModelSwitchStatusChanged?.Invoke(this, $"モデルを切り替えました: {item.DisplayName}");
             BackRequested?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {
             ModelListView.SelectedItem = null;
             ShowError(ResourceLoader.GetString("ModelSelectionDialog_SwitchErrorTitle"), ex.Message);
+            ModelSwitchStatusChanged?.Invoke(this, $"モデル切り替えに失敗: {ex.Message}");
         }
         finally
         {
+            await progressCancellation.CancelAsync();
+            await progressTask;
             LoadingProgressRing.IsActive = false;
+            ModelLoadStatusTextBlock.Visibility = Visibility.Collapsed;
             ModelListView.IsEnabled = true;
+            ModelSwitchFinished?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    async Task PollModelLoadStageAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                try
+                {
+                    HealthInfo health = await _apiClient.GetHealthAsync(ct);
+                    if (health.ModelLoadingStage is string stage)
+                    {
+                        string status = $"モデルを切り替え中: {stage}";
+                        if (health.ModelDownloadSource is string source &&
+                            health.ModelDownloadDestination is string destination)
+                        {
+                            status += $"\nDL 元: {source}\n保存先: {destination}";
+                        }
+                        ModelLoadStatusTextBlock.Text = status;
+                        ModelSwitchStatusChanged?.Invoke(this, status);
+                    }
+                }
+                catch (HttpRequestException)
+                {
+                    // A temporary health-check failure does not stop the switch.
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
         }
     }
 

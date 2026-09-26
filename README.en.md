@@ -67,6 +67,10 @@ uv sync
 
 On first launch, the backend automatically downloads an image-generation model from Hugging Face (default: `stabilityai/sd-turbo`).
 
+### Krea 2 Turbo
+
+Place an original Krea 2 Turbo transformer file such as `krea2Turbo_v10_bf16.safetensors` in your configured model directory and select it from the model screen. ComfyUI scaled FP8 weights also load, but they are restored to BF16 at runtime, so generation memory use and speed are similar to the BF16 version. The first load downloads the required Qwen3-VL text encoder and Qwen-Image VAE from Hugging Face. The selected transformer stays at its original path. The UI sets 8 steps, CFG 0, Euler, and 1024×1024. Krea 2 Turbo supports text-to-image generation; image-to-image is unavailable. GPU inference offloads components to CPU between stages to reduce VRAM use.
+
 ### Launch
 
 ```powershell

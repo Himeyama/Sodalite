@@ -25,6 +25,8 @@ public sealed partial class GenerationPage : Page
 
     readonly DispatcherQueueTimer _backendStartingSpinnerTimer;
     readonly GenerationViewModel _viewModel;
+    BackendApiClient? _apiClient;
+    bool _isKrea2;
 
     int _backendStartingSpinnerIndex;
     double _skeletonAspectRatio = 1.0;
@@ -75,14 +77,35 @@ public sealed partial class GenerationPage : Page
         DeviceInfoChanged?.Invoke(this, _viewModel.DeviceInfo);
     }
 
-    internal void AttachBackend(BackendApiClient apiClient) =>
+    internal void AttachBackend(BackendApiClient apiClient)
+    {
+        _apiClient = apiClient;
         _ = _viewModel.AttachBackendAsync(apiClient, CancellationToken.None);
+    }
 
     /// <summary>選択済み LoRA コレクション。モデル選択ダイアログがこれを直接編集する。</summary>
     internal ObservableCollection<SelectedLoraViewModel> SelectedLoras => _viewModel.SelectedLoras;
 
-    internal Task RefreshDeviceInfoAsync(BackendApiClient apiClient) =>
-        _viewModel.RefreshDeviceInfoAsync(apiClient, CancellationToken.None);
+    internal async Task RefreshDeviceInfoAsync(BackendApiClient apiClient)
+    {
+        HealthInfo health = await _viewModel.RefreshDeviceInfoAsync(apiClient, CancellationToken.None);
+        bool isKrea2 = Path.GetFileName(health.LoadedModel ?? "")
+            .StartsWith("krea2", StringComparison.OrdinalIgnoreCase);
+        if (isKrea2 && !_isKrea2)
+        {
+            StepsSlider.Value = 8;
+            CfgScaleSlider.Value = 0;
+            SamplerComboBox.SelectedItem = "euler";
+            WidthNumberBox.Value = 1024;
+            HeightNumberBox.Value = 1024;
+            _viewModel.InitialImage = null;
+            SelectedImageTextBlock.Text = ResourceLoader.GetString("Generation_NoImageSelected/Text");
+            ClearImageButton.IsEnabled = false;
+            StrengthSlider.IsEnabled = false;
+        }
+        _isKrea2 = isKrea2;
+        SelectImageButton.IsEnabled = !isKrea2 && !_viewModel.IsGenerating;
+    }
 
     /// <summary>llama.cpp の稼働確認とモデル一覧取得を開始する。失敗時はチャットを表示しない。</summary>
     internal Task InitializeChatAsync() =>
@@ -216,6 +239,10 @@ public sealed partial class GenerationPage : Page
                     _backendStartingSpinnerTimer.Stop();
                     GenerateButton.Content = ResourceLoader.GetString("Generation_GenerateButtonLabel");
                     BackendReadyChanged?.Invoke(this, EventArgs.Empty);
+                    if (_apiClient is not null)
+                    {
+                        _ = RefreshDeviceInfoAsync(_apiClient);
+                    }
                 }
 
                 GenerateButton.IsEnabled = _viewModel.IsBackendReady && !_viewModel.IsGenerating;
@@ -225,7 +252,7 @@ public sealed partial class GenerationPage : Page
                 GenerateButton.Visibility = _viewModel.IsGenerating ? Visibility.Collapsed : Visibility.Visible;
                 CancelButton.Visibility = _viewModel.IsGenerating ? Visibility.Visible : Visibility.Collapsed;
                 CancelButton.IsEnabled = _viewModel.IsGenerating;
-                SelectImageButton.IsEnabled = !_viewModel.IsGenerating;
+                SelectImageButton.IsEnabled = !_isKrea2 && !_viewModel.IsGenerating;
                 ClearImageButton.IsEnabled = !_viewModel.IsGenerating && _viewModel.InitialImage is not null;
                 UpdateResultAreaVisibility();
                 break;
