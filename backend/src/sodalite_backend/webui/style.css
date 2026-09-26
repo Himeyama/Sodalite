@@ -254,6 +254,11 @@ textarea {
   resize: vertical;
 }
 
+#prompt,
+#negative-prompt {
+  font-size: 18px;
+}
+
 input[type="range"] {
   display: block;
   width: 100%;

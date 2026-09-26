@@ -40,7 +40,7 @@
                         <FontIcon Glyph="&#xE72B;" FontSize="14" />
                     </Button>
                 </StackPanel>
-                <TextBox x:Name="PromptTextBox" x:Uid="Generation_PromptTextBox" AcceptsReturn="True" Height="100"
+                <TextBox x:Name="PromptTextBox" x:Uid="Generation_PromptTextBox" AcceptsReturn="True" Height="100" FontSize="18"
                          TextWrapping="Wrap" />
 
                 <StackPanel Orientation="Horizontal" Spacing="4">
@@ -55,7 +55,7 @@
                         <FontIcon Glyph="&#xE72B;" FontSize="14" />
                     </Button>
                 </StackPanel>
-                <TextBox x:Name="NegativePromptTextBox" x:Uid="Generation_NegativePromptTextBox" AcceptsReturn="True" Height="70"
+                <TextBox x:Name="NegativePromptTextBox" x:Uid="Generation_NegativePromptTextBox" AcceptsReturn="True" Height="70" FontSize="18"
                          TextWrapping="Wrap" />
 
                 <StackPanel Spacing="4">
