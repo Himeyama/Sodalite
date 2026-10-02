@@ -15,7 +15,11 @@ from diffusers import (
 )
 from huggingface_hub import constants, try_to_load_from_cache
 from safetensors import SafetensorError, safe_open
-from transformers import AutoTokenizer, Qwen3VLModel
+from transformers import AutoTokenizer, Qwen3VLForConditionalGeneration, Qwen3VLModel
+
+from sodalite_backend.inference.krea2_attention import enable_rocm_krea2_attention
+from sodalite_backend.inference.krea2_fp8 import retain_scaled_fp8
+from sodalite_backend.inference.krea2_runtime import GpuKrea2Pipeline
 
 TEXT_ENCODER_ID = "Qwen/Qwen3-VL-4B-Instruct"
 VAE_ID = "Qwen/Qwen-Image"
@@ -31,7 +35,10 @@ def _text_encoder_needs_download() -> bool:
         return True
     with open(index_path, encoding="utf-8") as index_file:
         shards = set(json.load(index_file)["weight_map"].values())
-    return not all(_cached(TEXT_ENCODER_ID, name) for name in shards | {"tokenizer.json", "tokenizer_config.json"})
+    return not all(
+        _cached(TEXT_ENCODER_ID, name)
+        for name in shards | {"tokenizer.json", "tokenizer_config.json"}
+    )
 
 
 def _vae_needs_download() -> bool:
@@ -93,10 +100,14 @@ def _diffusers_key(key: str) -> str:
     return key
 
 
-def _checkpoint_keys(checkpoint: safe_open, expected: set[str]) -> tuple[dict[str, str], dict[str, str]]:
+def _checkpoint_keys(
+    checkpoint: safe_open, expected: set[str]
+) -> tuple[dict[str, str], dict[str, str]]:
     """Match model weights and their optional ComfyUI scaled-FP8 companions."""
     keys = set(checkpoint.keys())
-    scale_sources = {key.removesuffix("_scale"): key for key in keys if key.endswith(".weight_scale")}
+    scale_sources = {
+        key.removesuffix("_scale"): key for key in keys if key.endswith(".weight_scale")
+    }
     weight_sources = keys - set(scale_sources.values())
     mapped = {_diffusers_key(key): key for key in weight_sources}
     if set(mapped) != expected or len(mapped) != len(weight_sources):
@@ -114,13 +125,15 @@ def _checkpoint_keys(checkpoint: safe_open, expected: set[str]) -> tuple[dict[st
     if set(layers) != scaled_layers or any(
         config.get("format") != "float8_e4m3fn" for config in layers.values()
     ):
-        raise ValueError("Unsupported Krea 2 quantization metadata; expected scaled float8_e4m3fn weights.")
+        raise ValueError(
+            "Unsupported Krea 2 quantization metadata; expected scaled float8_e4m3fn weights."
+        )
     if not set(scale_sources) <= weight_sources:
         raise ValueError("Krea 2 checkpoint has a weight_scale without a matching weight.")
     return mapped, scale_sources
 
 
-def load_krea2_transformer(path: str) -> Krea2Transformer2DModel:
+def load_krea2_transformer(path: str, *, keep_scaled_fp8: bool = False) -> Krea2Transformer2DModel:
     """Stream each tensor into a meta-initialized model to avoid a second 26 GB copy."""
     with init_empty_weights():
         transformer = Krea2Transformer2DModel()
@@ -137,15 +150,41 @@ def load_krea2_transformer(path: str) -> Krea2Transformer2DModel:
                 if target.endswith(".scale_shift_table") and value.numel() == shape.numel():
                     value = value.reshape(shape)
                 else:
-                    raise ValueError(f"Invalid Krea 2 tensor shape for {source}: {tuple(value.shape)}")
+                    raise ValueError(
+                        f"Invalid Krea 2 tensor shape for {source}: {tuple(value.shape)}"
+                    )
             if source in scale_sources:
                 scale = checkpoint.get_tensor(scale_sources[source])
-                if value.dtype != torch.float8_e4m3fn or scale.dtype != torch.float32 or scale.ndim != 0:
+                if (
+                    value.dtype != torch.float8_e4m3fn
+                    or scale.dtype != torch.float32
+                    or scale.ndim != 0
+                ):
                     raise ValueError(f"Invalid Krea 2 scaled FP8 weight: {source}")
+                if (
+                    keep_scaled_fp8
+                    and target.startswith("transformer_blocks.")
+                    and target.endswith(".weight")
+                ):
+                    module = transformer.get_submodule(target.removesuffix(".weight"))
+                    if isinstance(module, torch.nn.Linear):
+                        retain_scaled_fp8(module, scale)
+                        set_module_tensor_to_device(
+                            transformer, target, "cpu", value=value, dtype=value.dtype
+                        )
+                        continue
                 value = value.to(torch.float32).mul_(scale).to(torch.bfloat16)
             elif value.dtype == torch.float8_e4m3fn:
                 raise ValueError(f"Krea 2 FP8 weight is missing its scale: {source}")
-            if target.endswith((".norm1.weight", ".norm2.weight", ".norm.weight", ".norm_q.weight", ".norm_k.weight")):
+            if target.endswith(
+                (
+                    ".norm1.weight",
+                    ".norm2.weight",
+                    ".norm.weight",
+                    ".norm_q.weight",
+                    ".norm_k.weight",
+                )
+            ):
                 dtype = torch.float32
             else:
                 dtype = torch.bfloat16
@@ -154,31 +193,71 @@ def load_krea2_transformer(path: str) -> Krea2Transformer2DModel:
     return transformer.eval().requires_grad_(False)
 
 
+def load_krea2_text_encoder() -> Qwen3VLModel:
+    """Load the checkpoint's conditional-generation wrapper before extracting its model.
+
+    Transformers 4.57 misidentifies the `model.*` checkpoint prefixes when loading
+    Qwen3VLModel directly and silently initializes the text encoder randomly.
+    Loading the actual saved architecture avoids that mismatch. Refuse partial
+    loads so a broken encoder cannot produce apparently successful generations.
+    """
+    pretrained, loading_info = Qwen3VLForConditionalGeneration.from_pretrained(
+        TEXT_ENCODER_ID, torch_dtype=torch.bfloat16, output_loading_info=True
+    )
+    if (
+        loading_info["missing_keys"]
+        or loading_info["mismatched_keys"]
+        or loading_info["error_msgs"]
+    ):
+        raise ValueError(f"Incomplete Krea 2 text encoder checkpoint: {loading_info}")
+    return pretrained.model.eval().requires_grad_(False)
+
+
 def load_krea2_pipeline(
     path: str,
     device: torch.device | str,
     on_stage: Callable[[str, str | None, str | None], None] | None = None,
+    *,
+    optimize: bool = True,
+    keep_scaled_fp8: bool = True,
 ) -> Krea2Pipeline:
     """Use the selected local transformer and download only its shared components."""
+
     def stage(message: str, download_repo: str | None = None) -> None:
         if on_stage is not None:
-            source, destination = _download_location(download_repo) if download_repo else (None, None)
+            source, destination = (
+                _download_location(download_repo) if download_repo else (None, None)
+            )
             on_stage(message, source, destination)
 
     text_download = _text_encoder_needs_download()
-    stage("Qwen3-VL 4B をダウンロード・読み込み中" if text_download else "Qwen3-VL 4B を読み込み中",
-          TEXT_ENCODER_ID if text_download else None)
-    text_encoder = Qwen3VLModel.from_pretrained(TEXT_ENCODER_ID, torch_dtype=torch.bfloat16)
+    stage(
+        "Qwen3-VL 4B をダウンロード・読み込み中" if text_download else "Qwen3-VL 4B を読み込み中",
+        TEXT_ENCODER_ID if text_download else None,
+    )
+    text_encoder = load_krea2_text_encoder()
     tokenizer = AutoTokenizer.from_pretrained(TEXT_ENCODER_ID)
     vae_download = _vae_needs_download()
-    stage("Qwen-Image VAE をダウンロード・読み込み中" if vae_download else "Qwen-Image VAE を読み込み中",
-          VAE_ID if vae_download else None)
-    vae = AutoencoderKLQwenImage.from_pretrained(VAE_ID, subfolder="vae", torch_dtype=torch.bfloat16)
+    stage(
+        "Qwen-Image VAE をダウンロード・読み込み中"
+        if vae_download
+        else "Qwen-Image VAE を読み込み中",
+        VAE_ID if vae_download else None,
+    )
+    vae = AutoencoderKLQwenImage.from_pretrained(
+        VAE_ID, subfolder="vae", torch_dtype=torch.bfloat16
+    )
     stage("Krea 2 の重みを読み込み中")
-    transformer = load_krea2_transformer(path)
+    transformer = load_krea2_transformer(
+        path, keep_scaled_fp8=optimize and keep_scaled_fp8 and torch.device(device).type == "cuda"
+    )
+    if optimize and torch.device(device).type == "cuda" and torch.version.hip is not None:
+        enable_rocm_krea2_attention(transformer)
     stage("パイプラインを準備中")
     scheduler = FlowMatchEulerDiscreteScheduler(use_dynamic_shifting=True)
-    pipeline = Krea2Pipeline(
+    use_gpu = torch.device(device).type == "cuda"
+    pipeline_type = GpuKrea2Pipeline if use_gpu and optimize else Krea2Pipeline
+    pipeline = pipeline_type(
         scheduler=scheduler,
         vae=vae,
         text_encoder=text_encoder,
@@ -186,7 +265,10 @@ def load_krea2_pipeline(
         transformer=transformer,
         is_distilled=True,
     )
-    if str(device) == "cuda":
+    if isinstance(pipeline, GpuKrea2Pipeline):
+        stage("ROCm/CUDA GPU 実行を設定中")
+        pipeline.configure_gpu(device)
+    elif use_gpu:
         stage("GPU オフロードを設定中")
         pipeline.enable_model_cpu_offload()
     else:

@@ -116,7 +116,8 @@ sealed class BackendApiClient(int port) : IDisposable
             ?? throw new InvalidOperationException("Empty response from backend.");
 
         return new HealthInfo(dto.Status, dto.Device, dto.LoadedModel, dto.ModelReady,
-            dto.ModelError, dto.ModelLoadingStage, dto.ModelDownloadSource, dto.ModelDownloadDestination);
+            dto.ModelError, dto.ModelLoadingStage, dto.ModelDownloadSource, dto.ModelDownloadDestination,
+            dto.ModelFamily);
     }
 
     public async Task<List<ModelInfo>> GetModelsAsync(CancellationToken ct)
@@ -270,7 +271,8 @@ sealed class BackendApiClient(int port) : IDisposable
         [property: JsonPropertyName("model_error")] string? ModelError,
         [property: JsonPropertyName("model_loading_stage")] string? ModelLoadingStage,
         [property: JsonPropertyName("model_download_source")] string? ModelDownloadSource,
-        [property: JsonPropertyName("model_download_destination")] string? ModelDownloadDestination);
+        [property: JsonPropertyName("model_download_destination")] string? ModelDownloadDestination,
+        [property: JsonPropertyName("model_family")] string? ModelFamily);
 
     sealed record GalleryImageDto(
         [property: JsonPropertyName("image_id")] string ImageId,
@@ -310,6 +312,7 @@ sealed class BackendApiClient(int port) : IDisposable
 }
 
 sealed record HealthInfo(string Status, string Device, string? LoadedModel, bool ModelReady,
-    string? ModelError, string? ModelLoadingStage, string? ModelDownloadSource, string? ModelDownloadDestination);
+    string? ModelError, string? ModelLoadingStage, string? ModelDownloadSource, string? ModelDownloadDestination,
+    string? ModelFamily);
 
 sealed record ScanDirectories(string? ModelDir, string? LoraDir);

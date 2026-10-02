@@ -32,6 +32,7 @@ def health(request: Request) -> dict[str, object]:
         "device": pipeline_manager.device_backend,
         "loaded_model": pipeline_manager.model_id,
         "model_ready": pipeline_manager.is_ready,
+        "model_family": pipeline_manager.model_family,
         "model_error": pipeline_manager.load_error,
         "model_loading_stage": pipeline_manager.load_stage,
         "model_download_source": pipeline_manager.download_source,

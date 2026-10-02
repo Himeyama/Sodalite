@@ -96,9 +96,8 @@ public sealed partial class GenerationPage : Page
     internal async Task RefreshDeviceInfoAsync(BackendApiClient apiClient)
     {
         HealthInfo health = await _viewModel.RefreshDeviceInfoAsync(apiClient, CancellationToken.None);
-        bool isKrea2 = Path.GetFileName(health.LoadedModel ?? "")
-            .StartsWith("krea2", StringComparison.OrdinalIgnoreCase);
-        bool isAnima = health.LoadedModel?.Contains("anima", StringComparison.OrdinalIgnoreCase) == true;
+        bool isKrea2 = health.ModelFamily == "krea2";
+        bool isAnima = health.ModelFamily == "anima";
         if (isAnima && !string.Equals(health.LoadedModel, _loadedModelId, StringComparison.OrdinalIgnoreCase))
         {
             StepsSlider.Value = 30;
@@ -130,6 +129,9 @@ public sealed partial class GenerationPage : Page
         _isAnima = isAnima;
         _loadedModelId = health.LoadedModel;
         SelectImageButton.IsEnabled = !isKrea2 && !isAnima && !_viewModel.IsGenerating;
+        CfgScaleSlider.IsEnabled = !isKrea2;
+        NegativePromptTextBox.IsEnabled = !isKrea2;
+        SamplerComboBox.IsEnabled = !isKrea2;
     }
 
     /// <summary>llama.cpp の稼働確認とモデル一覧取得を開始する。失敗時はチャットを表示しない。</summary>

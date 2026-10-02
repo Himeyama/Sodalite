@@ -2,6 +2,7 @@
 
 import time
 from collections.abc import Iterator
+from contextlib import nullcontext
 from unittest.mock import MagicMock
 
 import pytest
@@ -16,6 +17,13 @@ def mock_pipeline_manager() -> MagicMock:
     manager.device_backend = "cpu"
     manager.model_id = "stub/model"
     manager.is_ready = True
+    manager.model_family = "stable_diffusion"
+    manager.load_error = None
+    manager.load_stage = None
+    manager.download_source = None
+    manager.download_destination = None
+    manager.normalize_generation_request.side_effect = lambda request: request
+    manager.generation_session.side_effect = nullcontext
     manager.generate.return_value = [Image.new("RGB", (8, 8))]
     return manager
 

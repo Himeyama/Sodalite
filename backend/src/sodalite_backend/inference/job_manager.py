@@ -7,10 +7,11 @@ original POST, which lets it show each image as soon as it's saved and offer
 a cancel button that takes effect between images.
 """
 
-from base64 import b64decode
-from io import BytesIO
 import threading
 import uuid
+from base64 import b64decode
+from contextlib import AbstractContextManager
+from io import BytesIO
 from typing import Protocol
 
 from PIL import Image
@@ -27,6 +28,10 @@ from sodalite_backend.schemas.generation import (
 
 
 class SupportsGenerate(Protocol):
+    def generation_session(self) -> AbstractContextManager[None]: ...
+
+    def normalize_generation_request(self, request: TextToImageRequest) -> TextToImageRequest: ...
+
     def generate(
         self,
         prompt: str,
@@ -111,12 +116,22 @@ class JobManager:
         request: TextToImageRequest | ImageToImageRequest,
         cancel_event: threading.Event,
     ) -> None:
+        with self._pipeline_manager.generation_session():
+            self._run_job_in_session(job_id, request, cancel_event)
+
+    def _run_job_in_session(
+        self,
+        job_id: str,
+        request: TextToImageRequest | ImageToImageRequest,
+        cancel_event: threading.Event,
+    ) -> None:
         self._update_job(job_id, status="running")
 
         def report_step(step_index: int, total_steps: int) -> None:
             self._update_job(job_id, current_step=step_index, total_steps=total_steps)
 
         try:
+            request = self._pipeline_manager.normalize_generation_request(request)
             initial_image = (
                 _prepare_initial_image(_decode_initial_image(request.initial_image))
                 if isinstance(request, ImageToImageRequest)
@@ -148,7 +163,10 @@ class JobManager:
             images_completed = 0
             for image in images:
                 image_path = new_image_path()
-                save_with_metadata(image, image_path, metadata)
+                image_metadata = dict(metadata)
+                if request.seed is not None:
+                    image_metadata["seed"] = request.seed + images_completed
+                save_with_metadata(image, image_path, image_metadata)
                 images_completed += 1
 
                 self._update_job(

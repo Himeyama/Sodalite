@@ -15,6 +15,11 @@ def test_health(client: TestClient) -> None:
         "device": "cpu",
         "loaded_model": "stub/model",
         "model_ready": True,
+        "model_family": "stable_diffusion",
+        "model_error": None,
+        "model_loading_stage": None,
+        "model_download_source": None,
+        "model_download_destination": None,
     }
 
 
@@ -48,6 +53,68 @@ def test_text_to_image_job_completes_with_image(client: TestClient, wait_for_job
     assert body["image_url"].startswith("/api/v1/images/")
     assert Path(body["image_path"]).is_absolute()
     assert Path(body["image_path"]).name == body["image_url"].removeprefix("/api/v1/images/")
+
+
+def test_generation_saves_effective_parameters(
+    client: TestClient, mock_pipeline_manager, wait_for_job_done
+) -> None:
+    from sodalite_backend.imaging.png_metadata import read_metadata
+
+    mock_pipeline_manager.normalize_generation_request.side_effect = lambda request: (
+        request.model_copy(
+            update={
+                "cfg_scale": 0.0,
+                "negative_prompt": "",
+                "sampler": "euler",
+                "width": 528,
+            }
+        )
+    )
+    response = client.post(
+        "/api/v1/generations/text-to-image",
+        json={
+            "prompt": "fox",
+            "negative_prompt": "bad",
+            "cfg_scale": 7,
+            "sampler": "ddim",
+            "width": 520,
+        },
+    )
+    job = wait_for_job_done(client, response.json()["job_id"])
+    assert job["status"] == "completed"
+    metadata = read_metadata(Path(job["image_path"]))
+    args = mock_pipeline_manager.generate.call_args.kwargs
+    for key, value in {
+        "cfg_scale": 0,
+        "negative_prompt": "",
+        "sampler": "euler",
+        "width": 528,
+    }.items():
+        assert metadata[key] == args[key] == value
+
+
+def test_batch_pngs_store_the_seed_used_for_each_image(
+    client: TestClient, mock_pipeline_manager, wait_for_job_done
+) -> None:
+    from PIL import Image
+
+    from sodalite_backend.imaging.png_metadata import read_metadata
+
+    mock_pipeline_manager.generate.return_value = [
+        Image.new("RGB", (8, 8)),
+        Image.new("RGB", (8, 8)),
+    ]
+    response = client.post(
+        "/api/v1/generations/text-to-image", json={"prompt": "fox", "seed": 42, "batch_size": 2}
+    )
+    job = wait_for_job_done(client, response.json()["job_id"])
+    assert job["status"] == "completed"
+    last_path = Path(job["image_path"])
+    assert read_metadata(last_path)["seed"] == 43
+    assert sorted(read_metadata(path)["seed"] for path in last_path.parent.glob("*.png")) == [
+        42,
+        43,
+    ]
 
 
 def test_get_generation_job_missing_returns_404(client: TestClient) -> None:
@@ -101,9 +168,7 @@ def test_set_active_model(client: TestClient, mock_pipeline_manager) -> None:
     mock_pipeline_manager.load_model.assert_called_once_with("other/model")
 
 
-def test_set_active_model_rejects_unknown_model(
-    client: TestClient, mock_pipeline_manager
-) -> None:
+def test_set_active_model_rejects_unknown_model(client: TestClient, mock_pipeline_manager) -> None:
     mock_pipeline_manager.load_model.side_effect = OSError("model not found")
 
     response = client.post("/api/v1/models/active", json={"model_id": "no/such-model"})
@@ -150,9 +215,7 @@ def test_list_models_scans_model_directory(client: TestClient, tmp_path) -> None
     (model_dir / "a.safetensors").write_bytes(b"x")
     (model_dir / "sub" / "b.ckpt").write_bytes(b"y")
     (model_dir / "notes.txt").write_text("ignore me")
-    client.put(
-        "/api/v1/settings/directories", json={"model_dir": str(model_dir), "lora_dir": None}
-    )
+    client.put("/api/v1/settings/directories", json={"model_dir": str(model_dir), "lora_dir": None})
 
     model_ids = [model["model_id"] for model in client.get("/api/v1/models").json()]
 
@@ -167,9 +230,7 @@ def test_list_loras_scans_lora_directory(client: TestClient, tmp_path) -> None:
     (lora_dir / "l1.safetensors").write_bytes(b"z")
     (lora_dir / "deep" / "l2.safetensors").write_bytes(b"w")
     (lora_dir / "l3.ckpt").write_bytes(b"q")  # .ckpt is not a LoRA format
-    client.put(
-        "/api/v1/settings/directories", json={"model_dir": None, "lora_dir": str(lora_dir)}
-    )
+    client.put("/api/v1/settings/directories", json={"model_dir": None, "lora_dir": str(lora_dir)})
 
     lora_ids = [item["lora_id"] for item in client.get("/api/v1/loras").json()]
 

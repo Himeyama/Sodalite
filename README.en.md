@@ -69,7 +69,9 @@ On first launch, the backend automatically downloads an image-generation model f
 
 ### Krea 2 Turbo
 
-Place an original Krea 2 Turbo transformer file such as `krea2Turbo_v10_bf16.safetensors` in your configured model directory and select it from the model screen. ComfyUI scaled FP8 weights also load, but they are restored to BF16 at runtime, so generation memory use and speed are similar to the BF16 version. The first load downloads the required Qwen3-VL text encoder and Qwen-Image VAE from Hugging Face. The selected transformer stays at its original path. The UI sets 8 steps, CFG 0, Euler, and 1024×1024. Krea 2 Turbo supports text-to-image generation; image-to-image is unavailable. GPU inference offloads components to CPU between stages to reduce VRAM use.
+Place an original Krea 2 Turbo transformer file such as `krea2Turbo_v10_bf16.safetensors` in your configured model directory and select it from the model screen. ComfyUI scaled FP8 weights stay in FP8 on GPU; each active linear layer is restored to BF16 on GPU for computation. BF16 checkpoints are not additionally quantized. The first load downloads the required Qwen3-VL text encoder and Qwen-Image VAE from Hugging Face. The selected transformer stays at its original path. The UI sets 8 steps, CFG 0, Euler, and 1024×1024, and disables unused controls. Model detection uses checkpoint contents rather than the filename. Krea 2 Turbo supports text-to-image generation; image-to-image is unavailable.
+
+Radeon inference prefers ROCm. Text encoding, denoising and VAE decoding execute on GPU; CPU holds inactive weights. ROCm attention and padding removal enable fused kernels, and identical prompts reuse their encoded features. The transformer stays on GPU when there is sufficient VRAM; otherwise its weights are transferred in blocks. Cancellation takes effect between denoising steps, and PNG metadata records effective parameters and each image's actual seed. See the [ROCm validation report](docs/krea2-rocm-validation.md) for measurements and reproduction commands.
 
 ### ANIMA Base v1.0
 

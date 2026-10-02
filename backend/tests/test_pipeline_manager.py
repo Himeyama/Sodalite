@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from sodalite_backend.inference.pipeline_manager import PipelineManager, _select_device
-from sodalite_backend.schemas.generation import LoraSpec
+from sodalite_backend.schemas.generation import ImageToImageRequest, LoraSpec, TextToImageRequest
 
 
 def _make_manager() -> PipelineManager:
@@ -21,7 +21,9 @@ def _make_manager() -> PipelineManager:
 
 def test_select_device_prefers_cuda_over_directml() -> None:
     with (
-        patch("sodalite_backend.inference.pipeline_manager.torch.cuda.is_available", return_value=True),
+        patch(
+            "sodalite_backend.inference.pipeline_manager.torch.cuda.is_available", return_value=True
+        ),
         patch("sodalite_backend.inference.pipeline_manager.torch.version.hip", None),
         patch("sodalite_backend.inference.pipeline_manager._get_directml_device") as directml,
     ):
@@ -31,7 +33,9 @@ def test_select_device_prefers_cuda_over_directml() -> None:
 
 def test_select_device_identifies_rocm_build() -> None:
     with (
-        patch("sodalite_backend.inference.pipeline_manager.torch.cuda.is_available", return_value=True),
+        patch(
+            "sodalite_backend.inference.pipeline_manager.torch.cuda.is_available", return_value=True
+        ),
         patch("sodalite_backend.inference.pipeline_manager.torch.version.hip", "7.2.1"),
         patch("sodalite_backend.inference.pipeline_manager._get_directml_device") as directml,
     ):
@@ -42,7 +46,10 @@ def test_select_device_identifies_rocm_build() -> None:
 def test_select_device_uses_directml_when_cuda_is_unavailable() -> None:
     dml_device = MagicMock()
     with (
-        patch("sodalite_backend.inference.pipeline_manager.torch.cuda.is_available", return_value=False),
+        patch(
+            "sodalite_backend.inference.pipeline_manager.torch.cuda.is_available",
+            return_value=False,
+        ),
         patch(
             "sodalite_backend.inference.pipeline_manager._get_directml_device",
             return_value=dml_device,
@@ -53,7 +60,10 @@ def test_select_device_uses_directml_when_cuda_is_unavailable() -> None:
 
 def test_select_device_falls_back_to_cpu() -> None:
     with (
-        patch("sodalite_backend.inference.pipeline_manager.torch.cuda.is_available", return_value=False),
+        patch(
+            "sodalite_backend.inference.pipeline_manager.torch.cuda.is_available",
+            return_value=False,
+        ),
         patch(
             "sodalite_backend.inference.pipeline_manager._get_directml_device", return_value=None
         ),
@@ -127,9 +137,7 @@ def test_anima_uses_safe_precision(tmp_path, backend, bf16_supported, expected_d
         patch(
             "sodalite_backend.inference.pipeline_manager.is_krea2_checkpoint", return_value=False
         ),
-        patch(
-            "sodalite_backend.inference.pipeline_manager.is_anima_checkpoint", return_value=True
-        ),
+        patch("sodalite_backend.inference.pipeline_manager.is_anima_checkpoint", return_value=True),
         patch(
             "sodalite_backend.inference.pipeline_manager.torch.cuda.is_bf16_supported",
             return_value=bf16_supported,
@@ -145,6 +153,7 @@ def test_generate_loads_and_activates_loras_by_weight() -> None:
     manager = _make_manager()
     pipeline = MagicMock()
     pipeline.lora_state_dict.return_value = ({}, {}, {})
+    pipeline.get_list_adapters.return_value = {"unet": ["lora_0", "lora_1"]}
     manager._pipeline = pipeline
     manager.set_sampler = MagicMock()
 
@@ -173,6 +182,7 @@ def test_generate_skips_text_encoder_lora_diffusers_cannot_parse() -> None:
     manager = _make_manager()
     pipeline = MagicMock()
     pipeline.lora_state_dict.return_value = ({}, {}, {})
+    pipeline.get_list_adapters.return_value = {"unet": ["lora_0"]}
     # Mirror the diffusers 0.39 bug where inferring the rank of an
     # unparseable text-encoder sub-weight raises IndexError.
     pipeline.load_lora_into_text_encoder.side_effect = IndexError("list index out of range")
@@ -202,6 +212,7 @@ def test_generate_skips_incompatible_lora_but_applies_the_rest() -> None:
     manager = _make_manager()
     pipeline = MagicMock()
     pipeline.lora_state_dict.return_value = ({}, {}, {})
+    pipeline.get_list_adapters.return_value = {"unet": ["lora_1"]}
     # First LoRA is an architecture mismatch (e.g. SDXL LoRA on an SD1.5 model);
     # diffusers rejects it while loading into the UNet.
     pipeline.load_lora_into_unet.side_effect = [ValueError("size mismatch"), None]
@@ -384,3 +395,123 @@ def test_generate_stops_early_when_should_stop_becomes_true() -> None:
     # second image starts, so only the first image is produced.
     assert len(images) == 1
     assert pipeline.call_count == 1
+
+
+def test_krea2_uses_cpu_noise_generator_and_preserves_incrementing_seeds() -> None:
+    from diffusers import Krea2Pipeline
+
+    manager = _make_manager()
+    pipeline = MagicMock(spec=Krea2Pipeline)
+    manager._pipeline = pipeline
+    list(
+        manager.generate(
+            prompt="fox",
+            negative_prompt="bad",
+            steps=8,
+            cfg_scale=7,
+            width=1024,
+            height=1024,
+            sampler="ddim",
+            seed=42,
+            batch_size=2,
+        )
+    )
+    calls = pipeline.call_args_list
+    assert [call.kwargs["generator"].initial_seed() for call in calls] == [42, 43]
+    for call in calls:
+        assert call.kwargs["generator"].device.type == "cpu"
+        assert call.kwargs["guidance_scale"] == 0
+        assert call.kwargs["negative_prompt"] is None
+
+
+def test_krea2_cancellation_stops_inside_image_without_yielding_partial_output() -> None:
+    from diffusers import Krea2Pipeline
+
+    manager = _make_manager()
+    pipeline = MagicMock(spec=Krea2Pipeline)
+    manager._pipeline = pipeline
+    checks = iter([False, True])
+
+    def generate(**kwargs):
+        kwargs["callback_on_step_end"](pipeline, 0, 1000, {})
+        raise AssertionError("Cancelled generation continued to decoding")
+
+    pipeline.side_effect = generate
+    assert (
+        list(
+            manager.generate(
+                prompt="fox",
+                negative_prompt="",
+                steps=8,
+                cfg_scale=0,
+                width=1024,
+                height=1024,
+                sampler="euler",
+                seed=42,
+                should_stop=lambda: next(checks),
+            )
+        )
+        == []
+    )
+
+
+def test_krea2_effective_parameters_follow_architecture_not_filename() -> None:
+    from diffusers import Krea2Pipeline
+
+    manager = _make_manager()
+    manager._pipeline = MagicMock(spec=Krea2Pipeline)
+    manager.model_id = "C:/models/renamed.safetensors"
+    request = TextToImageRequest(
+        prompt="fox", negative_prompt="bad", cfg_scale=7, sampler="ddim", width=520, height=1032
+    )
+    effective = manager.normalize_generation_request(request)
+    assert manager.model_family == "krea2"
+    assert effective.cfg_scale == 0
+    assert effective.negative_prompt == ""
+    assert effective.sampler == "euler"
+    assert (effective.width, effective.height) == (528, 1040)
+    assert request.cfg_scale == 7
+    with pytest.raises(ValueError, match="text-to-image only"):
+        manager.normalize_generation_request(
+            ImageToImageRequest(prompt="fox", initial_image="abcd")
+        )
+
+
+def test_model_switch_waits_until_active_generation_iterator_closes() -> None:
+    import threading
+
+    manager = _make_manager()
+    manager._pipeline = MagicMock()
+    manager.set_sampler = MagicMock()
+    manager._load_pipeline = MagicMock(return_value=MagicMock())
+    iterator = manager.generate(
+        prompt="fox",
+        negative_prompt="",
+        steps=1,
+        cfg_scale=0,
+        width=64,
+        height=64,
+        sampler="euler",
+        seed=None,
+        batch_size=2,
+    )
+    next(iterator)
+    attempting = threading.Event()
+    finished = threading.Event()
+
+    def switch():
+        attempting.set()
+        manager.load_model("new/model")
+        finished.set()
+
+    thread = threading.Thread(target=switch)
+    thread.start()
+    try:
+        assert attempting.wait(2)
+        assert not finished.wait(0.05)
+        manager._load_pipeline.assert_not_called()
+    finally:
+        iterator.close()
+        thread.join(timeout=5)
+    assert finished.is_set()
+    manager._load_pipeline.assert_called_once_with("new/model")

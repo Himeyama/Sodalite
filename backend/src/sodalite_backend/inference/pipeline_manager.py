@@ -3,7 +3,9 @@
 import contextlib
 import gc
 import logging
+import threading
 from collections.abc import Callable, Iterator
+from functools import wraps
 from pathlib import Path
 
 import torch
@@ -20,16 +22,44 @@ from PIL import Image
 
 from sodalite_backend.inference.anima import is_anima_checkpoint, load_anima_pipeline
 from sodalite_backend.inference.krea2 import is_krea2_checkpoint, load_krea2_pipeline
+from sodalite_backend.inference.krea2_runtime import GpuKrea2Pipeline
 from sodalite_backend.inference.prompt_weights import (
     apply_attention_weights,
     has_attention_syntax,
     parse_prompt_attention,
 )
 from sodalite_backend.inference.samplers import SAMPLER_CLASSES
-from sodalite_backend.schemas.generation import LoraSpec, Sampler
+from sodalite_backend.schemas.generation import (
+    ImageToImageRequest,
+    LoraSpec,
+    Sampler,
+    TextToImageRequest,
+)
 
 logger = logging.getLogger(__name__)
 type TextToImagePipeline = DiffusionPipeline | AnimaModularPipeline
+
+
+class _GenerationCancelled(Exception):
+    """Stop denoising without decoding or saving an incomplete image."""
+
+
+def _serialized[**P, T](method: Callable[P, T]) -> Callable[P, T]:
+    @wraps(method)
+    def locked(*args: P.args, **kwargs: P.kwargs) -> T:
+        with args[0]._inference_lock:
+            return method(*args, **kwargs)
+
+    return locked
+
+
+def _serialized_generation[**P, T](method: Callable[P, Iterator[T]]) -> Callable[P, Iterator[T]]:
+    @wraps(method)
+    def locked(*args: P.args, **kwargs: P.kwargs) -> Iterator[T]:
+        with args[0]._inference_lock:
+            yield from method(*args, **kwargs)
+
+    return locked
 
 
 class ModelNotReadyError(Exception):
@@ -76,6 +106,7 @@ class PipelineManager:
     """
 
     def __init__(self) -> None:
+        self._inference_lock = threading.RLock()
         self.device, self.device_backend = _select_device()
         self.model_id: str | None = None
         self.load_error: str | None = None
@@ -89,6 +120,39 @@ class PipelineManager:
     def is_ready(self) -> bool:
         return self._pipeline is not None
 
+    @property
+    def model_family(self) -> str | None:
+        """Report the loaded architecture independently of the checkpoint filename."""
+        if isinstance(self._pipeline, Krea2Pipeline):
+            return "krea2"
+        if isinstance(self._pipeline, AnimaModularPipeline):
+            return "anima"
+        return "stable_diffusion" if self._pipeline is not None else None
+
+    @contextlib.contextmanager
+    def generation_session(self) -> Iterator[None]:
+        """Keep model selection, effective parameters and generation in one session."""
+        with self._inference_lock:
+            yield
+
+    @_serialized
+    def normalize_generation_request(self, request: TextToImageRequest) -> TextToImageRequest:
+        """Use the same effective parameters for inference and saved PNG metadata."""
+        if self.model_family != "krea2":
+            return request
+        if isinstance(request, ImageToImageRequest):
+            raise ValueError("Krea 2 Turbo currently supports text-to-image only.")
+        return request.model_copy(
+            update={
+                "cfg_scale": 0.0,
+                "negative_prompt": "",
+                "sampler": "euler",
+                "width": (request.width + 15) // 16 * 16,
+                "height": (request.height + 15) // 16 * 16,
+            }
+        )
+
+    @_serialized
     def load_initial_model(self, model_id: str) -> None:
         """Load the first model. Intended to run once, before any `load_model` call."""
         try:
@@ -105,6 +169,7 @@ class PipelineManager:
         self.model_id = model_id
         self.load_error = None
 
+    @_serialized
     def load_model(self, model_id: str) -> None:
         """Replace the currently loaded pipeline with a different model.
 
@@ -114,6 +179,8 @@ class PipelineManager:
         stay reserved and make the next load run out of VRAM.
         """
         self.load_stage = "モデルを読み込み中"
+        if isinstance(self._pipeline, GpuKrea2Pipeline):
+            self._pipeline.release_gpu()
         try:
             new_pipeline = self._load_pipeline(model_id)
         finally:
@@ -139,9 +206,7 @@ class PipelineManager:
 
     def _load_pipeline(self, model_id: str) -> TextToImagePipeline:
         dtype = (
-            torch.float16
-            if self.device_backend in {"cuda", "rocm", "directml"}
-            else torch.float32
+            torch.float16 if self.device_backend in {"cuda", "rocm", "directml"} else torch.float32
         )
 
         if Path(model_id).is_file():
@@ -239,7 +304,9 @@ class PipelineManager:
                     for adapter in adapters
                 }
                 if name not in registered:
-                    logger.warning("Skipping LoRA %s: no Anima adapter was registered", lora.model_id)
+                    logger.warning(
+                        "Skipping LoRA %s: no Anima adapter was registered", lora.model_id
+                    )
                     continue
                 adapter_names.append(name)
                 adapter_weights.append(lora.weight)
@@ -254,9 +321,7 @@ class PipelineManager:
             adapter_name = f"lora_{index}"
             if self._load_single_lora(lora.model_id, adapter_name):
                 registered = {
-                    name
-                    for names in pipeline.get_list_adapters().values()
-                    for name in names
+                    name for names in pipeline.get_list_adapters().values() for name in names
                 }
                 if adapter_name in registered:
                     adapter_names.append(adapter_name)
@@ -399,6 +464,7 @@ class PipelineManager:
             )
         return arguments
 
+    @_serialized_generation
     def generate(
         self,
         prompt: str,
@@ -430,7 +496,9 @@ class PipelineManager:
         Raises `ModelNotReadyError` if no model has finished loading yet.
         """
         pipeline = (
-            self._get_image_to_image_pipeline() if initial_image is not None else self._require_pipeline()
+            self._get_image_to_image_pipeline()
+            if initial_image is not None
+            else self._require_pipeline()
         )
         is_krea2 = isinstance(pipeline, Krea2Pipeline)
         is_anima = isinstance(pipeline, AnimaModularPipeline)
@@ -439,9 +507,9 @@ class PipelineManager:
         if is_anima:
             pipeline.guider.guidance_scale = cfg_scale
 
-        if loras:
-            self._apply_loras(loras)
         try:
+            if loras:
+                self._apply_loras(loras)
             for index in range(batch_size):
                 if should_stop is not None and should_stop():
                     return
@@ -450,7 +518,9 @@ class PipelineManager:
                 if seed is not None:
                     # DirectML does not implement a private-use-device Generator.
                     # diffusers accepts a CPU generator while tensors run on DML.
-                    generator_device = "cpu" if self.device_backend == "directml" else self.device
+                    generator_device = (
+                        "cpu" if is_krea2 or self.device_backend == "directml" else self.device
+                    )
                     generator = torch.Generator(device=generator_device).manual_seed(seed + index)
 
                 def report_step(
@@ -459,6 +529,8 @@ class PipelineManager:
                     _timestep: int,
                     callback_kwargs: dict[str, object],
                 ) -> dict[str, object]:
+                    if is_krea2 and should_stop is not None and should_stop():
+                        raise _GenerationCancelled
                     if on_step is not None:
                         on_step(step_index + 1, steps)
                     return callback_kwargs
@@ -471,30 +543,32 @@ class PipelineManager:
                     width=width,
                     height=height,
                     generator=generator,
-                    callback_on_step_end=report_step if on_step is not None else None,
+                    callback_on_step_end=report_step
+                    if on_step is not None or (is_krea2 and should_stop is not None)
+                    else None,
                 )
                 if is_krea2:
                     arguments["guidance_scale"] = 0.0
                     arguments["negative_prompt"] = None
-                    arguments["generator"] = (
-                        torch.Generator(device="cpu").manual_seed(seed + index)
-                        if seed is not None
-                        else None
-                    )
                 elif is_anima and (
                     has_attention_syntax(prompt) or has_attention_syntax(negative_prompt)
                 ):
                     arguments["prompt"] = "".join(
                         fragment.text for fragment in parse_prompt_attention(prompt)
                     )
-                    arguments["negative_prompt"] = "".join(
-                        fragment.text for fragment in parse_prompt_attention(negative_prompt)
-                    ) or None
+                    arguments["negative_prompt"] = (
+                        "".join(
+                            fragment.text for fragment in parse_prompt_attention(negative_prompt)
+                        )
+                        or None
+                    )
                 elif has_attention_syntax(prompt) or has_attention_syntax(negative_prompt):
                     arguments.pop("prompt")
                     arguments.pop("negative_prompt")
                     arguments.update(
-                        self._weighted_prompt_arguments(pipeline, prompt, negative_prompt, cfg_scale)
+                        self._weighted_prompt_arguments(
+                            pipeline, prompt, negative_prompt, cfg_scale
+                        )
                     )
                 if is_anima:
                     arguments.pop("guidance_scale")
@@ -507,9 +581,11 @@ class PipelineManager:
                     original_step = scheduler.step
                     completed_steps = 0
 
-                    def report_anima_step(*args: object, **kwargs: object) -> object:
+                    def report_anima_step(
+                        *args: object, _step: Callable = original_step, **kwargs: object
+                    ) -> object:
                         nonlocal completed_steps
-                        result = original_step(*args, **kwargs)
+                        result = _step(*args, **kwargs)
                         completed_steps += 1
                         on_step(min(completed_steps, steps), steps)
                         return result
@@ -522,6 +598,12 @@ class PipelineManager:
                 else:
                     result = pipeline(**arguments)
                 yield result.images[0]
+        except _GenerationCancelled:
+            return
+        except Exception:
+            if isinstance(pipeline, GpuKrea2Pipeline):
+                pipeline.release_gpu()
+            raise
         finally:
             if loras:
                 self._clear_loras()

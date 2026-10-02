@@ -64,6 +64,7 @@ const els = {
 
 let runningJobId = null;
 let activeModelId = null;
+let activeModelFamily = null;
 let backendReady = false;
 let backendLoadError = null;
 let lightboxImage = null;
@@ -185,6 +186,7 @@ async function loadHealth() {
   try {
     const health = await getJson("/health");
     activeModelId = health.loaded_model;
+    activeModelFamily = health.model_family ?? null;
     backendReady = health.model_ready;
     backendLoadError = health.model_error;
     els.navModel.textContent = `${health.device} · ${modelDisplayName(health.loaded_model)}`;
@@ -196,9 +198,9 @@ async function loadHealth() {
   }
 }
 
-function applyModelDefaults(modelId, force = false) {
-  const isKrea2 = /^krea2/i.test(modelDisplayName(modelId));
-  const isAnima = /anima/i.test(modelDisplayName(modelId));
+function applyModelDefaults(modelId, force = false, modelFamily = activeModelFamily) {
+  const isKrea2 = modelFamily === "krea2" || (modelFamily === null && /^krea2/i.test(modelDisplayName(modelId)));
+  const isAnima = modelFamily === "anima" || (modelFamily === null && /anima/i.test(modelDisplayName(modelId)));
   if (isAnima && (force || modelId !== activeModelId)) {
     els.steps.value = "30";
     els.stepsOut.textContent = "30";
@@ -213,7 +215,7 @@ function applyModelDefaults(modelId, force = false) {
     els.sourceImage.value = "";
     els.sourceImageName.textContent = "画像は選択されていません";
   }
-  if (isKrea2 && (force || !/^krea2/i.test(modelDisplayName(activeModelId)))) {
+  if (isKrea2 && (force || activeModelFamily !== "krea2")) {
     els.steps.value = "8";
     els.stepsOut.textContent = "8";
     els.cfg.value = "0";
@@ -227,6 +229,9 @@ function applyModelDefaults(modelId, force = false) {
     els.strength.disabled = true;
   }
   const imageToImageUnavailable = isKrea2 || isAnima;
+  els.cfg.disabled = isKrea2;
+  els.negativePrompt.disabled = isKrea2;
+  els.sampler.disabled = isKrea2;
   els.sourceImage.disabled = imageToImageUnavailable;
   els.strength.disabled = imageToImageUnavailable || initialImageBase64 === null;
 }
@@ -568,9 +573,9 @@ function setGenerating(active) {
   els.cancel.hidden = !active;
   els.cancel.disabled = false;
   const imageToImageUnavailable =
-    /^krea2/i.test(modelDisplayName(activeModelId)) || /anima/i.test(modelDisplayName(activeModelId));
+    activeModelFamily === "krea2" || activeModelFamily === "anima";
   els.sourceImage.disabled = active || imageToImageUnavailable;
-  els.strength.disabled = active || initialImageBase64 === null;
+  els.strength.disabled = active || imageToImageUnavailable || initialImageBase64 === null;
 }
 
 async function selectSourceImage() {
@@ -671,8 +676,10 @@ async function switchModel(modelId) {
       const detail = await res.json().catch(() => null);
       throw new Error(detail?.detail ?? `切り替えに失敗しました (${res.status})`);
     }
-    applyModelDefaults(modelId);
+    const health = await getJson("/health");
+    applyModelDefaults(modelId, false, health.model_family ?? null);
     activeModelId = modelId;
+    activeModelFamily = health.model_family ?? null;
     setStatus(`モデルを切り替えました: ${modelDisplayName(modelId)}`);
     await Promise.all([loadHealth(), loadModels()]);
     els.generate.disabled = !backendReady;

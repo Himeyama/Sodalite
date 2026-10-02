@@ -83,9 +83,11 @@ uv sync
 
 ### Krea 2 Turbo
 
-モデルフォルダーに `krea2Turbo_v10_bf16.safetensors` などの Krea 2 Turbo 重みを置き、モデル画面から選択する。ComfyUI 形式の scaled FP8 重みも読み込めるが、実行時には BF16 に復元するため、生成時のメモリ使用量や速度は BF16 版とほぼ同じになる。初回選択時には、画像生成に必要な `Qwen/Qwen3-VL-4B-Instruct` テキストエンコーダーと `Qwen/Qwen-Image` VAE が Hugging Face からダウンロードされる。重みファイルは元の場所から読み込み、複製しない。
+モデルフォルダーに `krea2Turbo_v10_bf16.safetensors` などの Krea 2 Turbo 重みを置き、モデル画面から選択する。ComfyUI 形式の scaled FP8 重みは、GPU では FP8 のまま保持し、使用する層だけ GPU 上で BF16 に復元して計算する。BF16 ファイルを追加で量子化することはない。初回選択時には、画像生成に必要な `Qwen/Qwen3-VL-4B-Instruct` テキストエンコーダーと `Qwen/Qwen-Image` VAE が Hugging Face からダウンロードされる。重みファイルは元の場所から読み込み、複製しない。
 
-Turbo の推奨設定は 8 ステップ、CFG 0、Euler、1024×1024。モデル選択時に画面の値が自動設定される。Krea 2 Turbo はテキストからの画像生成に対応し、画像からの生成は使用できない。BF16 の大きなモデルなので、GPU ではテキストエンコーダー・生成器・VAE を順に CPU と GPU 間で入れ替えて実行する。
+Turbo の推奨設定は 8 ステップ、CFG 0、Euler、1024×1024。モデル選択時に画面の値が自動設定され、使用しない CFG・ネガティブプロンプト・サンプラーの操作は無効になる。モデル種別は重みから判定するため、ファイル名を変更しても対応する。Krea 2 Turbo はテキストからの画像生成に対応し、画像からの生成は使用できない。
+
+Radeon では ROCm を優先し、テキスト符号化・画像生成・VAE 復号を GPU 上で実行する。ROCm 用 Attention とパディング除去で高速カーネルを利用し、同じプロンプトの符号化結果を再利用する。VRAM に余裕があれば生成器を GPU に保持し、不足する場合は重みをブロック単位で転送する。CPU は使用しない重みの保管場所として使う。生成途中のステップ間でも中止でき、PNG には実際に使用した設定と各画像の Seed を保存する。実機での測定と再現手順は [Krea 2 ROCm 検証](docs/krea2-rocm-validation.md) を参照。
 
 ### ANIMA Base v1.0
 
